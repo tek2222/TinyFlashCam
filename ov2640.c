@@ -6,6 +6,7 @@
  * OV2640 driver.
  *
  */
+#include <Arduino.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>

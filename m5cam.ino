@@ -1,3 +1,13 @@
+/**
+ * Based on https://github.com/mic159/m5cam
+ * 
+ * Reads an image from the camera and servers it to a connected client.
+ * Starts a webserver and starts streaming when a client connects
+ * 
+ * After the device has started change your computer's WiFi to m5cam 
+ * and open the browser at http://192.168.4.1 for a stream
+ * or http://192.168.4.1/camera for a still picture
+ */
 //#define CONFIG_ENABLE_TEST_PATTERN n
 #define CONFIG_OV2640_SUPPORT y
 //#define CONFIG_OV7725_SUPPORT y
@@ -33,6 +43,75 @@
 #include <lwip/err.h>
 #include <lwip/sockets.h>
 #include "camera.h"
+
+WiFiServer server(80);
+
+void serve()
+{
+  WiFiClient client = server.available();
+  if (client) 
+  {
+    //Serial.println("New Client.");
+    String currentLine = "";
+    while (client.connected()) 
+    {
+      if (client.available()) 
+      {
+        char c = client.read();
+        //Serial.write(c);
+        if (c == '\n') 
+        {
+          if (currentLine.length() == 0) 
+          {
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-type:text/html");
+            client.println();
+            client.print(
+              "<style>body{margin: 0}\nimg{height: 100%; width: auto}</style>"
+              "<img id='a' src='/camera' onload='this.style.display=\"initial\"; var b = document.getElementById(\"b\"); b.style.display=\"none\"; b.src=\"camera?\"+Date.now(); '>"
+              "<img id='b' style='display: none' src='/camera' onload='this.style.display=\"initial\"; var a = document.getElementById(\"a\"); a.style.display=\"none\"; a.src=\"camera?\"+Date.now(); '>");
+            client.println();
+            break;
+          } 
+          else 
+          {
+            currentLine = "";
+          }
+        } 
+        else if (c != '\r') 
+        {
+          currentLine += c;
+        }
+        
+        if(currentLine.endsWith("GET /camera"))
+        {
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-type:image/jpeg");
+            client.println();
+
+              esp_err_t err = camera_run();
+              if (err != ESP_OK) {
+                  ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
+                  return;
+              }
+            
+              size_t frame_size = camera_get_data_size();
+              uint8_t* fb = camera_get_fb();
+            
+
+              client.write(fb, frame_size);
+              
+
+        }
+      }
+    }
+    // close the connection:
+    client.stop();
+    //Serial.println("Client Disconnected.");
+  }  
+}
+
+
 
 static camera_pixelformat_t s_pixel_format;
 bool video_running = false;
@@ -104,60 +183,14 @@ void setup() {
 
   ESP_LOGI("Starting WiFi AP m5cam");
   WiFi.softAP("m5cam");
-  WiFi.onEvent(onClientChange, SYSTEM_EVENT_AP_STACONNECTED);
-  WiFi.onEvent(onClientChange, SYSTEM_EVENT_AP_STADISCONNECTED);
 
-  // Change beacon_interval because 100ms is crazy!
-  wifi_config_t conf;
-  esp_wifi_get_config(WIFI_IF_AP, &conf);
-  conf.ap.beacon_interval = 3000;
-  esp_wifi_set_config(WIFI_IF_AP, &conf);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
 
-  // Init socket
-  udp_server = socket(AF_INET, SOCK_DGRAM, 0);
-  //destination.sin_addr.s_addr = (uint32_t)IPAddress(255,255,255,255);
-  destination.sin_addr.s_addr = (uint32_t)IPAddress(192,168,4,2);
-  destination.sin_family = AF_INET;
-  destination.sin_port = htons(3333);
+  server.begin();
 }
 
-void onClientChange(system_event_id_t event) {
-  // Only start sending video after a client connects to avoid flooding
-  // the channel when the client is attempting to connect.
-  video_running = WiFi.softAPgetStationNum() != 0;
-  if (video_running) {
-    ESP_LOGI("Video started!");
-  } else {
-    ESP_LOGI("No more clients, Stop video.");
-  }
-}
-
-inline int min(int a,int b) {return ((a)<(b)?(a):(b)); }
 
 void loop() {
-  if (!video_running) {
-    return;
-  }
-
-  esp_err_t err = camera_run();
-  if (err != ESP_OK) {
-      ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
-      return;
-  }
-
-  size_t frame_size = camera_get_data_size();
-  const void* fb = camera_get_fb();
-
-  for (size_t i = 0; i < frame_size; i += 1460) {
-    bool last = frame_size - i < 1460;
-    int sent = sendto(
-      udp_server,
-      fb + i,
-      last ? frame_size - i : 1460,
-      last ? 0 : MSG_MORE,
-      (struct sockaddr*) &destination, sizeof(destination)
-    );
-  }
-
-  // Size: 24800 bytes (1460 per packet max)
+  serve();
 }
