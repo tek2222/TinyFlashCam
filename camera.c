@@ -209,6 +209,12 @@ esp_err_t camera_init(const camera_config_t* config)
     }
     s_state->sensor.set_pixformat(&s_state->sensor, pix_format);
 
+  //set auto exposure off
+   s_state->sensor.set_gain_ctrl(&s_state->sensor, 0);
+   s_state->sensor.set_exposure_ctrl(&s_state->sensor, 0);
+//   s_state->sensor.set_shutter_divider(&s_state->sensor, 2); // reduce shutter speed to a quarter of auto
+//    s_state->sensor.set_shutter_divider(&s_state->sensor, 2); // reduce shutter speed to a quarter of auto
+
 #if ENABLE_TEST_PATTERN
     /* Test pattern may get handy
      if you are unable to get the live image right.

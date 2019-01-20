@@ -669,6 +669,26 @@ static int set_exposure_ctrl(sensor_t *sensor, int enable)
     }
 
     ret |= SCCB_Write(sensor->slv_addr, COM8, reg);
+
+      /* from http://www.arducam.com/manual-exposure-ov2640
+     the minimum exposure time is 1 Line Time, and the maximum exposure time is one Frame time.
+     mimimum exposure time depends on pclk (53.4uSecs @ 36MHz)
+     pclk = xclk /(decimal value of clkrc[0:5]+1. Bit 7 is frequency doubler
+     Required register value is a multiplier of the minimum exposure time
+     Exposure time multiplier is spread across 3 registers.
+     However:
+     This function just reads the current value of the middle register and divides it down to reduce shutter time for faster exposure, or increase it for low light
+     Must disable automatic exposure control beforehand:
+     s_state->sensor.set_exposure_ctrl(&s_state->sensor, 0); // disable AEC
+     s_state->sensor.set_shutter_divider(&s_state->sensor, 2); // reduce shutter speed to a quarter of auto
+  */
+  int shutterDivider=2;
+  uint8_t AECreg = SCCB_Read(sensor->slv_addr, AEC); // provides bits 2-9 of exposure time multiplier
+  uint8_t newAECreg = AECreg>>shutterDivider; // shutterDivider is a +ve or -ve bit shift value
+  if (newAECreg < AECreg && shutterDivider < 0) return ret; // abandon if increased shutter time would overflow register
+  else ret |= SCCB_Write(sensor->slv_addr, AEC, newAECreg);
+
+
     return ret;
 }
 
