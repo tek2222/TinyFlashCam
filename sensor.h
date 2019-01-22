@@ -128,6 +128,8 @@ typedef struct _sensor {
     int  (*set_hmirror)         (sensor_t *sensor, int enable);
     int  (*set_vflip)           (sensor_t *sensor, int enable);
     int  (*set_special_effect)  (sensor_t *sensor, sde_t sde);
+    uint8_t (*get_yavg) (sensor_t *sensor);
+    int (*set_yavg) (sensor_t *sensor, int value);
 } sensor_t;
 
 // Resolution table

@@ -1,14 +1,14 @@
 /**
  * Based on https://github.com/mic159/m5cam
  * 
- * Reads an image from the camera and servers it to a connected client.
+ * Reads an 2image from the camera and servers it to a connected client.
  * Starts a webserver and starts streaming when a client connects
  * 
  * After the device has started change your computer's WiFi to m5cam 
  * and open the browser at http://192.168.4.1 for a stream
  * or http://192.168.4.1/camera for a still picture
  */
-//#define CONFIG_ENABLE_TEST_PATTERN n
+//#define CONFIG_ENABLE_TEST_PATTERN N
 #define CONFIG_OV2640_SUPPORT y
 //#define CONFIG_OV7725_SUPPORT y
 #define CONFIG_ESP32_DEFAULT_CPU_FREQ_240 y
@@ -36,6 +36,8 @@
 #define CAMERA_PIXEL_FORMAT CAMERA_PF_GRAYSCALE
 #define CAMERA_FRAME_SIZE CAMERA_FS_SVGA
 #define CAMERA_LED_GPIO 16
+#define GROVE3 4
+#define GROVE4 4
 
 
 #include <WiFi.h>
@@ -82,6 +84,18 @@ void serve()
         {
           currentLine += c;
         }
+
+        if(currentLine.endsWith("GET /expmanual"))
+        {
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-type:text/html");
+            client.println();
+            client.print("Setting Manual Exposure");
+            client.println();
+            break;
+  
+
+        }
         
         if(currentLine.endsWith("GET /camera"))
         {
@@ -89,6 +103,9 @@ void serve()
             client.println("Content-type:image/jpeg");
             client.println();
 
+              digitalWrite(GROVE4, HIGH);
+              digitalWrite(CAMERA_LED_GPIO, HIGH);
+            
               esp_err_t err = camera_run();
               if (err != ESP_OK) {
                   ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
@@ -96,8 +113,17 @@ void serve()
               }
             
               size_t frame_size = camera_get_data_size();
+              
               uint8_t* fb = camera_get_fb();
-            
+              
+              uint8_t yavg=camera_get_yavg();
+              Serial.print("yAVG:");
+              Serial.print(yavg);
+              
+              digitalWrite(CAMERA_LED_GPIO, LOW);
+
+              digitalWrite(GROVE4, LOW);
+
 
               client.write(fb, frame_size);
               
@@ -127,8 +153,30 @@ void setup() {
 
   ESP_ERROR_CHECK(gpio_install_isr_service(0));
   pinMode(CAMERA_LED_GPIO, OUTPUT);
-  digitalWrite(CAMERA_LED_GPIO, HIGH);
-  
+  pinMode(GROVE3, OUTPUT);
+
+  digitalWrite(GROVE4, HIGH);
+  delay(20);
+  digitalWrite(GROVE4, LOW);
+/*
+  for (int i=1;i<30;i++){
+      pinMode(i, OUTPUT);
+      for (int j=0;j<i;j++){
+        digitalWrite(i,HIGH);
+        delay(200);
+        digitalWrite(i,LOW);
+        delay(200);
+
+        }
+      delay(1000);
+    
+    pinMode(i,INPUT);
+    }
+
+
+
+  return;
+  */
   WiFi.disconnect(true);
 
   camera_config_t camera_config;
@@ -154,21 +202,22 @@ void setup() {
   camera_model_t camera_model;
   err = camera_probe(&camera_config, &camera_model);
   if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Camera probe failed with error 0x%x", err);
       return;
   }
 
   if (camera_model == CAMERA_OV7725) {
       s_pixel_format = CAMERA_PIXEL_FORMAT;
       camera_config.frame_size = CAMERA_FRAME_SIZE;
+      
       ESP_LOGI(TAG, "Detected OV7725 camera, using %s bitmap format",
               CAMERA_PIXEL_FORMAT == CAMERA_PF_GRAYSCALE ?
                       "grayscale" : "RGB565");
   } else if (camera_model == CAMERA_OV2640) {
       ESP_LOGI(TAG, "Detected OV2640 camera, using JPEG format");
       s_pixel_format = CAMERA_PF_JPEG;
+      //s_pixel_format =  CAMERA_PF_GRAYSCALE;
       camera_config.frame_size = CAMERA_FRAME_SIZE;
-      camera_config.jpeg_quality = 15;
+      camera_config.jpeg_quality = 10;
   } else {
       ESP_LOGE(TAG, "Camera not supported");
       return;
@@ -180,12 +229,49 @@ void setup() {
       ESP_LOGE(TAG, "Camera init failed with error 0x%x", err);
       return;
   }
+  Serial.println("done setup");
 
-  ESP_LOGI("Starting WiFi AP m5cam");
-  WiFi.softAP("m5cam");
+  const char * ssid="***";
+  const char * password="***";
 
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
+// Set your Static IP address
+IPAddress local_IP(10,1,10,201);
+// Set your Gateway IP address
+IPAddress gateway(10,1,10,1);
+
+IPAddress subnet(255, 255, 255, 0);
+IPAddress primaryDNS(8, 8, 8, 8);   //optional
+IPAddress secondaryDNS(8, 8, 4, 4); //optional
+
+
+if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
+    Serial.println("STA Failed to configure");
+  }
+  
+
+
+    Serial.print("Connecting to ");
+    Serial.println(ssid);
+
+    WiFi.begin(ssid, password);
+  // Configures static IP address
+  
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(100);
+        Serial.print(".");
+    }
+
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+
+
+//  ESP_LOGI("Starting WiFi AP m5cam");
+ // WiFi.softAP("m5cam");
+
+ // Serial.print("IP address: ");
+ // Serial.println(WiFi.localIP());
 
   server.begin();
 }

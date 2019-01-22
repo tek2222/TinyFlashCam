@@ -208,12 +208,14 @@ esp_err_t camera_init(const camera_config_t* config)
         goto fail;
     }
     s_state->sensor.set_pixformat(&s_state->sensor, pix_format);
+   
 
+ //reach additions : all auto functions off to create reproducible flash images.
   //set auto exposure off
    s_state->sensor.set_gain_ctrl(&s_state->sensor, 0);
    s_state->sensor.set_exposure_ctrl(&s_state->sensor, 0);
-//   s_state->sensor.set_shutter_divider(&s_state->sensor, 2); // reduce shutter speed to a quarter of auto
-//    s_state->sensor.set_shutter_divider(&s_state->sensor, 2); // reduce shutter speed to a quarter of auto
+   s_state->sensor.set_whitebal(&s_state->sensor, 0);
+  // s_state->sensor.set_yavg(&s_state->sensor, 5); 
 
 #if ENABLE_TEST_PATTERN
     /* Test pattern may get handy
@@ -380,6 +382,7 @@ esp_err_t camera_deinit()
 
 uint8_t* camera_get_fb()
 {
+  
     if (s_state == NULL) {
         return NULL;
     }
@@ -409,6 +412,12 @@ size_t camera_get_data_size()
     }
     return s_state->data_size;
 }
+
+uint8_t camera_get_yavg(){
+  return s_state->sensor.get_yavg(&s_state->sensor);
+
+ }
+
 
 esp_err_t camera_run()
 {

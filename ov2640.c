@@ -630,6 +630,39 @@ static int set_whitebal(sensor_t *sensor, int enable)
     return ret;
 }
 
+
+static uint8_t get_yavg(sensor_t *sensor)
+{
+    int ret=0;
+    uint8_t reg;
+
+    /* Switch to SENSOR register bank */
+    ret |= SCCB_Write(sensor->slv_addr, BANK_SEL, BANK_SEL_SENSOR);
+
+    reg = SCCB_Read(sensor->slv_addr, YAVG);
+    
+    return reg;
+}
+
+static int set_yavg(sensor_t *sensor,int value)
+{
+  
+    int ret=0;
+    uint8_t v;
+
+    v=value;
+    /* Switch to SENSOR register bank */
+    ret |= SCCB_Write(sensor->slv_addr, BANK_SEL, BANK_SEL_SENSOR);
+
+    
+//    ret |= SCCB_Write(sensor->slv_addr, YAVG, 5);
+
+  
+    return ret;
+}
+
+
+
 static int set_gain_ctrl(sensor_t *sensor, int enable)
 {
     int ret=0;
@@ -749,9 +782,11 @@ int ov2640_init(sensor_t *sensor)
     sensor->set_colorbar = set_colorbar;
     sensor->set_gain_ctrl = set_gain_ctrl;
     sensor->set_exposure_ctrl = set_exposure_ctrl;
-    sensor->set_whitebal = set_whitebal;
+    sensor->set_whitebal = set_whitebal;    
     sensor->set_hmirror = set_hmirror;
     sensor->set_vflip = set_vflip;
+    sensor->get_yavg = get_yavg;
+    sensor->set_yavg = set_yavg;
 
     // Set sensor flags
     SENSOR_HW_FLAGS_SET(sensor, SENSOR_HW_FLAGS_VSYNC, 1);
