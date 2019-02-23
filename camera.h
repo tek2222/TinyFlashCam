@@ -155,8 +155,6 @@ esp_err_t camera_run();
 /* get white balance_yavg*/
 uint8_t camera_get_yavg();
 
-
-
 /**
  * @brief Print contents of framebuffer on terminal
  *

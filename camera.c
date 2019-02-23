@@ -42,43 +42,43 @@
 
 #define ENABLE_TEST_PATTERN 0
 
-#define REG_PID        0x0A
-#define REG_VER        0x0B
-#define REG_MIDH       0x1C
-#define REG_MIDL       0x1D
+#define REG_PID 0x0A
+#define REG_VER 0x0B
+#define REG_MIDH 0x1C
+#define REG_MIDL 0x1D
 
-static const char* TAG = "camera";
+static const char *TAG = "camera";
 
-camera_state_t* s_state = NULL;
+camera_state_t *s_state = NULL;
 
 const int resolution[][2] = {
-        { 40, 30 }, /* 40x30 */
-        { 64, 32 }, /* 64x32 */
-        { 64, 64 }, /* 64x64 */
-        { 88, 72 }, /* QQCIF */
-        { 160, 120 }, /* QQVGA */
-        { 128, 160 }, /* QQVGA2*/
-        { 176, 144 }, /* QCIF  */
-        { 240, 160 }, /* HQVGA */
-        { 320, 240 }, /* QVGA  */
-        { 352, 288 }, /* CIF   */
-        { 640, 480 }, /* VGA   */
-        { 800, 600 }, /* SVGA  */
-        { 1280, 1024 }, /* SXGA  */
-        { 1600, 1200 }, /* UXGA  */
+    {40, 30},     /* 40x30 */
+    {64, 32},     /* 64x32 */
+    {64, 64},     /* 64x64 */
+    {88, 72},     /* QQCIF */
+    {160, 120},   /* QQVGA */
+    {128, 160},   /* QQVGA2*/
+    {176, 144},   /* QCIF  */
+    {240, 160},   /* HQVGA */
+    {320, 240},   /* QVGA  */
+    {352, 288},   /* CIF   */
+    {640, 480},   /* VGA   */
+    {800, 600},   /* SVGA  */
+    {1280, 1024}, /* SXGA  */
+    {1600, 1200}, /* UXGA  */
 };
 
 static void i2s_init();
 static void i2s_run();
-static void IRAM_ATTR gpio_isr(void* arg);
-static void IRAM_ATTR i2s_isr(void* arg);
+static void IRAM_ATTR gpio_isr(void *arg);
+static void IRAM_ATTR i2s_isr(void *arg);
 static esp_err_t dma_desc_init();
 static void dma_desc_deinit();
 static void dma_filter_task(void *pvParameters);
-static void dma_filter_grayscale(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst);
-static void dma_filter_grayscale_highspeed(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst);
-static void dma_filter_jpeg(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst);
-static void dma_filter_rgb565(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst);
+static void dma_filter_grayscale(const dma_elem_t *src, lldesc_t *dma_desc, uint8_t *dst);
+static void dma_filter_grayscale_highspeed(const dma_elem_t *src, lldesc_t *dma_desc, uint8_t *dst);
+static void dma_filter_jpeg(const dma_elem_t *src, lldesc_t *dma_desc, uint8_t *dst);
+static void dma_filter_rgb565(const dma_elem_t *src, lldesc_t *dma_desc, uint8_t *dst);
 static void i2s_stop();
 
 static bool is_hs_mode()
@@ -88,16 +88,17 @@ static bool is_hs_mode()
 
 static size_t i2s_bytes_per_sample(i2s_sampling_mode_t mode)
 {
-    switch(mode) {
-        case SM_0A00_0B00:
-            return 4;
-        case SM_0A0B_0B0C:
-            return 4;
-        case SM_0A0B_0C0D:
-            return 2;
-        default:
-            assert(0 && "invalid sampling mode");
-            return 0;
+    switch (mode)
+    {
+    case SM_0A00_0B00:
+        return 4;
+    case SM_0A0B_0B0C:
+        return 4;
+    case SM_0A0B_0C0D:
+        return 2;
+    default:
+        assert(0 && "invalid sampling mode");
+        return 0;
     }
 }
 
@@ -111,15 +112,16 @@ static void vsync_intr_enable()
     gpio_set_intr_type(s_state->config.pin_vsync, GPIO_INTR_NEGEDGE);
 }
 
-
-esp_err_t camera_probe(const camera_config_t* config, camera_model_t* out_camera_model)
+esp_err_t camera_probe(const camera_config_t *config, camera_model_t *out_camera_model)
 {
-    if (s_state != NULL) {
+    if (s_state != NULL)
+    {
         return ESP_ERR_INVALID_STATE;
     }
 
-    s_state = (camera_state_t*) calloc(sizeof(*s_state), 1);
-    if (!s_state) {
+    s_state = (camera_state_t *)calloc(sizeof(*s_state), 1);
+    if (!s_state)
+    {
         return ESP_ERR_NO_MEM;
     }
 
@@ -130,7 +132,7 @@ esp_err_t camera_probe(const camera_config_t* config, camera_model_t* out_camera
     SCCB_Init(config->pin_sscb_sda, config->pin_sscb_scl);
 
     ESP_LOGD(TAG, "Resetting camera");
-    gpio_config_t conf = { 0 };
+    gpio_config_t conf = {0};
     conf.pin_bit_mask = 1LL << config->pin_reset;
     conf.mode = GPIO_MODE_OUTPUT;
     gpio_config(&conf);
@@ -144,39 +146,41 @@ esp_err_t camera_probe(const camera_config_t* config, camera_model_t* out_camera
     /* Probe the sensor */
     delay(10);
     uint8_t slv_addr = SCCB_Probe();
-    if (slv_addr == 0) {
+    if (slv_addr == 0)
+    {
         *out_camera_model = CAMERA_NONE;
         return ESP_ERR_CAMERA_NOT_DETECTED;
     }
     s_state->sensor.slv_addr = slv_addr;
     ESP_LOGD(TAG, "Detected camera at address=0x%02x", slv_addr);
-    sensor_id_t* id = &s_state->sensor.id;
+    sensor_id_t *id = &s_state->sensor.id;
     id->PID = SCCB_Read(slv_addr, REG_PID);
     id->VER = SCCB_Read(slv_addr, REG_VER);
     id->MIDL = SCCB_Read(slv_addr, REG_MIDL);
     id->MIDH = SCCB_Read(slv_addr, REG_MIDH);
     delay(10);
     ESP_LOGD(TAG, "Camera PID=0x%02x VER=0x%02x MIDL=0x%02x MIDH=0x%02x",
-            id->PID, id->VER, id->MIDH, id->MIDL);
+             id->PID, id->VER, id->MIDH, id->MIDL);
 
-    switch (id->PID) {
+    switch (id->PID)
+    {
 #if CONFIG_OV2640_SUPPORT
-        case OV2640_PID:
-            *out_camera_model = CAMERA_OV2640;
-            ov2640_init(&s_state->sensor);
-            break;
+    case OV2640_PID:
+        *out_camera_model = CAMERA_OV2640;
+        ov2640_init(&s_state->sensor);
+        break;
 #endif
 #if CONFIG_OV7725_SUPPORT
-        case OV7725_PID:
-            *out_camera_model = CAMERA_OV7725;
-            ov7725_init(&s_state->sensor);
-            break;
+    case OV7725_PID:
+        *out_camera_model = CAMERA_OV7725;
+        ov7725_init(&s_state->sensor);
+        break;
 #endif
-        default:
-            id->PID = 0;
-            *out_camera_model = CAMERA_UNKNOWN;
-            ESP_LOGD(TAG, "Detected camera not supported.");
-            return ESP_ERR_CAMERA_NOT_SUPPORTED;
+    default:
+        id->PID = 0;
+        *out_camera_model = CAMERA_UNKNOWN;
+        ESP_LOGD(TAG, "Detected camera not supported.");
+        return ESP_ERR_CAMERA_NOT_SUPPORTED;
     }
 
     ESP_LOGD(TAG, "Doing SW reset of sensor");
@@ -185,37 +189,37 @@ esp_err_t camera_probe(const camera_config_t* config, camera_model_t* out_camera
     return ESP_OK;
 }
 
-esp_err_t camera_init(const camera_config_t* config)
+esp_err_t camera_init(const camera_config_t *config)
 {
-    if (!s_state) {
+    if (!s_state)
+    {
         return ESP_ERR_INVALID_STATE;
     }
-    if (s_state->sensor.id.PID == 0) {
+    if (s_state->sensor.id.PID == 0)
+    {
         return ESP_ERR_CAMERA_NOT_SUPPORTED;
     }
     memcpy(&s_state->config, config, sizeof(*config));
     esp_err_t err = ESP_OK;
-    framesize_t frame_size = (framesize_t) config->frame_size;
-    pixformat_t pix_format = (pixformat_t) config->pixel_format;
+    framesize_t frame_size = (framesize_t)config->frame_size;
+    pixformat_t pix_format = (pixformat_t)config->pixel_format;
     s_state->width = resolution[frame_size][0];
     s_state->height = resolution[frame_size][1];
     s_state->sensor.set_pixformat(&s_state->sensor, pix_format);
 
     ESP_LOGD(TAG, "Setting frame size to %dx%d", s_state->width, s_state->height);
-    if (s_state->sensor.set_framesize(&s_state->sensor, frame_size) != 0) {
+    if (s_state->sensor.set_framesize(&s_state->sensor, frame_size) != 0)
+    {
         ESP_LOGE(TAG, "Failed to set frame size");
         err = ESP_ERR_CAMERA_FAILED_TO_SET_FRAME_SIZE;
         goto fail;
     }
     s_state->sensor.set_pixformat(&s_state->sensor, pix_format);
-   
 
- //reach additions : all auto functions off to create reproducible flash images.
-  //set auto exposure off
-   s_state->sensor.set_gain_ctrl(&s_state->sensor, 0);
-   s_state->sensor.set_exposure_ctrl(&s_state->sensor, 0);
-   s_state->sensor.set_whitebal(&s_state->sensor, 0);
-  // s_state->sensor.set_yavg(&s_state->sensor, 5); 
+    //reach additions : all auto functions off to create reproducible flash images.
+    s_state->sensor.set_gain_ctrl(&s_state->sensor, 0);
+    s_state->sensor.set_exposure_ctrl(&s_state->sensor, 0);
+    s_state->sensor.set_whitebal(&s_state->sensor, 0);
 
 #if ENABLE_TEST_PATTERN
     /* Test pattern may get handy
@@ -227,78 +231,102 @@ esp_err_t camera_init(const camera_config_t* config)
     ESP_LOGD(TAG, "Test pattern enabled");
 #endif
 
-    if (pix_format == PIXFORMAT_GRAYSCALE) {
-        if (s_state->sensor.id.PID != OV7725_PID) {
+    if (pix_format == PIXFORMAT_GRAYSCALE)
+    {
+        if (s_state->sensor.id.PID != OV7725_PID)
+        {
             ESP_LOGE(TAG, "Grayscale format is only supported for ov7225");
             err = ESP_ERR_NOT_SUPPORTED;
             goto fail;
         }
         s_state->fb_size = s_state->width * s_state->height;
-        if (is_hs_mode()) {
+        if (is_hs_mode())
+        {
             s_state->sampling_mode = SM_0A0B_0B0C;
             s_state->dma_filter = &dma_filter_grayscale_highspeed;
-        } else {
+        }
+        else
+        {
             s_state->sampling_mode = SM_0A0B_0C0D;
             s_state->dma_filter = &dma_filter_grayscale;
         }
-        s_state->in_bytes_per_pixel = 2;       // camera sends YUYV
-        s_state->fb_bytes_per_pixel = 1;       // frame buffer stores Y8
-    } else if (pix_format == PIXFORMAT_RGB565) {
-        if (s_state->sensor.id.PID != OV7725_PID) {
+        s_state->in_bytes_per_pixel = 2; // camera sends YUYV
+        s_state->fb_bytes_per_pixel = 1; // frame buffer stores Y8
+    }
+    else if (pix_format == PIXFORMAT_RGB565)
+    {
+        if (s_state->sensor.id.PID != OV7725_PID)
+        {
             ESP_LOGE(TAG, "RGB565 format is only supported for ov7225");
             err = ESP_ERR_NOT_SUPPORTED;
             goto fail;
         }
         s_state->fb_size = s_state->width * s_state->height * 3;
-        if (is_hs_mode()) {
+        if (is_hs_mode())
+        {
             s_state->sampling_mode = SM_0A0B_0B0C;
-        } else {
+        }
+        else
+        {
             s_state->sampling_mode = SM_0A00_0B00;
         }
-        s_state->in_bytes_per_pixel = 2;       // camera sends RGB565 (2 bytes)
-        s_state->fb_bytes_per_pixel = 3;       // frame buffer stores RGB888
+        s_state->in_bytes_per_pixel = 2; // camera sends RGB565 (2 bytes)
+        s_state->fb_bytes_per_pixel = 3; // frame buffer stores RGB888
         s_state->dma_filter = &dma_filter_rgb565;
-
-    } else if (pix_format == PIXFORMAT_JPEG) {
-        if (s_state->sensor.id.PID != OV2640_PID) {
+    }
+    else if (pix_format == PIXFORMAT_JPEG)
+    {
+        if (s_state->sensor.id.PID != OV2640_PID)
+        {
             ESP_LOGE(TAG, "JPEG format is only supported for ov2640");
             err = ESP_ERR_NOT_SUPPORTED;
             goto fail;
         }
         int qp = config->jpeg_quality;
         int compression_ratio_bound;
-        if (qp >= 30) {
+        if (qp >= 30)
+        {
             compression_ratio_bound = 5;
-        } else if (qp >= 10) {
+        }
+        else if (qp >= 10)
+        {
             compression_ratio_bound = 10;
-        } else {
+        }
+        else
+        {
             compression_ratio_bound = 20;
         }
         (*s_state->sensor.set_quality)(&s_state->sensor, qp);
         size_t equiv_line_count = s_state->height / compression_ratio_bound;
         s_state->fb_size = s_state->width * equiv_line_count * 2 /* bpp */;
         s_state->dma_filter = &dma_filter_jpeg;
-        if (is_hs_mode()) {
+        if (is_hs_mode())
+        {
             s_state->sampling_mode = SM_0A0B_0B0C;
-        } else {
+        }
+        else
+        {
             s_state->sampling_mode = SM_0A00_0B00;
         }
         s_state->in_bytes_per_pixel = 2;
         s_state->fb_bytes_per_pixel = 2;
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "Requested format is not supported");
         err = ESP_ERR_NOT_SUPPORTED;
         goto fail;
     }
 
     ESP_LOGD(TAG, "in_bpp: %d, fb_bpp: %d, fb_size: %d, mode: %d, width: %d height: %d",
-            s_state->in_bytes_per_pixel, s_state->fb_bytes_per_pixel,
-            s_state->fb_size, s_state->sampling_mode,
-            s_state->width, s_state->height);
+             s_state->in_bytes_per_pixel, s_state->fb_bytes_per_pixel,
+             s_state->fb_size, s_state->sampling_mode,
+             s_state->width, s_state->height);
 
     ESP_LOGD(TAG, "Allocating frame buffer (%d bytes)", s_state->fb_size);
-    s_state->fb = (uint8_t*) calloc(s_state->fb_size, 1);
-    if (s_state->fb == NULL) {
+    s_state->fb = (uint8_t *)calloc(s_state->fb_size, 1);
+    if (s_state->fb == NULL)
+    {
         ESP_LOGE(TAG, "Failed to allocate frame buffer");
         err = ESP_ERR_NO_MEM;
         goto fail;
@@ -307,19 +335,22 @@ esp_err_t camera_init(const camera_config_t* config)
     ESP_LOGD(TAG, "Initializing I2S and DMA");
     i2s_init();
     err = dma_desc_init();
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "Failed to initialize I2S and DMA");
         goto fail;
     }
 
     s_state->data_ready = xQueueCreate(16, sizeof(size_t));
     s_state->frame_ready = xSemaphoreCreateBinary();
-    if (s_state->data_ready == NULL || s_state->frame_ready == NULL) {
+    if (s_state->data_ready == NULL || s_state->frame_ready == NULL)
+    {
         ESP_LOGE(TAG, "Failed to create semaphores");
         err = ESP_ERR_NO_MEM;
         goto fail;
     }
-    if (!xTaskCreatePinnedToCore(&dma_filter_task, "dma_filter", 4096, NULL, 10, &s_state->dma_filter_task, 1)) {
+    if (!xTaskCreatePinnedToCore(&dma_filter_task, "dma_filter", 4096, NULL, 10, &s_state->dma_filter_task, 1))
+    {
         ESP_LOGE(TAG, "Failed to create DMA filter task");
         err = ESP_ERR_NO_MEM;
         goto fail;
@@ -328,19 +359,23 @@ esp_err_t camera_init(const camera_config_t* config)
     ESP_LOGD(TAG, "Initializing GPIO interrupts");
     vsync_intr_disable();
     err = gpio_isr_handler_add(s_state->config.pin_vsync, &gpio_isr, NULL);
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "gpio_isr_handler_add failed (%x)", err);
         goto fail;
     }
 
     // skip at least one frame after changing camera settings
-    while (gpio_get_level(s_state->config.pin_vsync) == 0) {
+    while (gpio_get_level(s_state->config.pin_vsync) == 0)
+    {
         ;
     }
-    while (gpio_get_level(s_state->config.pin_vsync) != 0) {
+    while (gpio_get_level(s_state->config.pin_vsync) != 0)
+    {
         ;
     }
-    while (gpio_get_level(s_state->config.pin_vsync) == 0) {
+    while (gpio_get_level(s_state->config.pin_vsync) == 0)
+    {
         ;
     }
     s_state->frame_count = 0;
@@ -354,20 +389,25 @@ fail:
 
 esp_err_t camera_deinit()
 {
-    if (s_state == NULL) {
+    if (s_state == NULL)
+    {
         return ESP_ERR_INVALID_STATE;
     }
-    if (s_state->dma_filter_task) {
+    if (s_state->dma_filter_task)
+    {
         vTaskDelete(s_state->dma_filter_task);
     }
-    if (s_state->data_ready) {
+    if (s_state->data_ready)
+    {
         vQueueDelete(s_state->data_ready);
     }
-    if (s_state->frame_ready) {
+    if (s_state->frame_ready)
+    {
         vSemaphoreDelete(s_state->frame_ready);
     }
     gpio_isr_handler_remove(s_state->config.pin_vsync);
-    if (s_state->i2s_intr_handle) {
+    if (s_state->i2s_intr_handle)
+    {
         esp_intr_disable(s_state->i2s_intr_handle);
         esp_intr_free(s_state->i2s_intr_handle);
     }
@@ -380,10 +420,11 @@ esp_err_t camera_deinit()
     return ESP_OK;
 }
 
-uint8_t* camera_get_fb()
+uint8_t *camera_get_fb()
 {
-  
-    if (s_state == NULL) {
+
+    if (s_state == NULL)
+    {
         return NULL;
     }
     return s_state->fb;
@@ -391,7 +432,8 @@ uint8_t* camera_get_fb()
 
 int camera_get_fb_width()
 {
-    if (s_state == NULL) {
+    if (s_state == NULL)
+    {
         return 0;
     }
     return s_state->width;
@@ -399,7 +441,8 @@ int camera_get_fb_width()
 
 int camera_get_fb_height()
 {
-    if (s_state == NULL) {
+    if (s_state == NULL)
+    {
         return 0;
     }
     return s_state->height;
@@ -407,21 +450,22 @@ int camera_get_fb_height()
 
 size_t camera_get_data_size()
 {
-    if (s_state == NULL) {
+    if (s_state == NULL)
+    {
         return 0;
     }
     return s_state->data_size;
 }
 
-uint8_t camera_get_yavg(){
-  return s_state->sensor.get_yavg(&s_state->sensor);
-
- }
-
+uint8_t camera_get_yavg()
+{
+    return s_state->sensor.get_yavg(&s_state->sensor);
+}
 
 esp_err_t camera_run()
 {
-    if (s_state == NULL) {
+    if (s_state == NULL)
+    {
         return ESP_ERR_INVALID_STATE;
     }
     struct timeval tv_start;
@@ -444,11 +488,12 @@ static esp_err_t dma_desc_init()
 {
     assert(s_state->width % 4 == 0);
     size_t line_size = s_state->width * s_state->in_bytes_per_pixel *
-            i2s_bytes_per_sample(s_state->sampling_mode);
+                       i2s_bytes_per_sample(s_state->sampling_mode);
     ESP_LOGD(TAG, "Line width (for DMA): %d bytes", line_size);
     size_t dma_per_line = 1;
     size_t buf_size = line_size;
-    while (buf_size >= 4096) {
+    while (buf_size >= 4096)
+    {
         buf_size /= 2;
         dma_per_line *= 2;
     }
@@ -459,35 +504,40 @@ static esp_err_t dma_desc_init()
     ESP_LOGD(TAG, "DMA buffer size: %d, DMA buffers per line: %d", buf_size, dma_per_line);
     ESP_LOGD(TAG, "DMA buffer count: %d", dma_desc_count);
 
-    s_state->dma_buf = (dma_elem_t**) malloc(sizeof(dma_elem_t*) * dma_desc_count);
-    if (s_state->dma_buf == NULL) {
+    s_state->dma_buf = (dma_elem_t **)malloc(sizeof(dma_elem_t *) * dma_desc_count);
+    if (s_state->dma_buf == NULL)
+    {
         return ESP_ERR_NO_MEM;
     }
-    s_state->dma_desc = (lldesc_t*) malloc(sizeof(lldesc_t) * dma_desc_count);
-    if (s_state->dma_desc == NULL) {
+    s_state->dma_desc = (lldesc_t *)malloc(sizeof(lldesc_t) * dma_desc_count);
+    if (s_state->dma_desc == NULL)
+    {
         return ESP_ERR_NO_MEM;
     }
     size_t dma_sample_count = 0;
-    for (int i = 0; i < dma_desc_count; ++i) {
+    for (int i = 0; i < dma_desc_count; ++i)
+    {
         ESP_LOGD(TAG, "Allocating DMA buffer #%d, size=%d", i, buf_size);
-        dma_elem_t* buf = (dma_elem_t*) malloc(buf_size);
-        if (buf == NULL) {
+        dma_elem_t *buf = (dma_elem_t *)malloc(buf_size);
+        if (buf == NULL)
+        {
             return ESP_ERR_NO_MEM;
         }
         s_state->dma_buf[i] = buf;
         ESP_LOGV(TAG, "dma_buf[%d]=%p", i, buf);
 
-        lldesc_t* pd = &s_state->dma_desc[i];
+        lldesc_t *pd = &s_state->dma_desc[i];
         pd->length = buf_size;
         if (s_state->sampling_mode == SM_0A0B_0B0C &&
-            (i + 1) % dma_per_line == 0) {
+            (i + 1) % dma_per_line == 0)
+        {
             pd->length -= 4;
         }
         dma_sample_count += pd->length / 4;
         pd->size = pd->length;
         pd->owner = 1;
         pd->sosf = 1;
-        pd->buf = (uint8_t*) buf;
+        pd->buf = (uint8_t *)buf;
         pd->offset = 0;
         pd->empty = 0;
         pd->eof = 1;
@@ -500,8 +550,10 @@ static esp_err_t dma_desc_init()
 
 static void dma_desc_deinit()
 {
-    if (s_state->dma_buf) {
-        for (int i = 0; i < s_state->dma_desc_count; ++i) {
+    if (s_state->dma_buf)
+    {
+        for (int i = 0; i < s_state->dma_desc_count; ++i)
+        {
             free(s_state->dma_buf[i]);
         }
     }
@@ -511,46 +563,45 @@ static void dma_desc_deinit()
 
 static inline void i2s_conf_reset()
 {
-    const uint32_t lc_conf_reset_flags = I2S_IN_RST_M | I2S_AHBM_RST_M
-            | I2S_AHBM_FIFO_RST_M;
+    const uint32_t lc_conf_reset_flags = I2S_IN_RST_M | I2S_AHBM_RST_M | I2S_AHBM_FIFO_RST_M;
     I2S0.lc_conf.val |= lc_conf_reset_flags;
     I2S0.lc_conf.val &= ~lc_conf_reset_flags;
 
-    const uint32_t conf_reset_flags = I2S_RX_RESET_M | I2S_RX_FIFO_RESET_M
-            | I2S_TX_RESET_M | I2S_TX_FIFO_RESET_M;
+    const uint32_t conf_reset_flags = I2S_RX_RESET_M | I2S_RX_FIFO_RESET_M | I2S_TX_RESET_M | I2S_TX_FIFO_RESET_M;
     I2S0.conf.val |= conf_reset_flags;
     I2S0.conf.val &= ~conf_reset_flags;
-    while (I2S0.state.rx_fifo_reset_back) {
+    while (I2S0.state.rx_fifo_reset_back)
+    {
         ;
     }
 }
 
 static void i2s_init()
 {
-    camera_config_t* config = &s_state->config;
+    camera_config_t *config = &s_state->config;
 
     // Configure input GPIOs
     gpio_num_t pins[] = {
-            config->pin_d7,
-            config->pin_d6,
-            config->pin_d5,
-            config->pin_d4,
-            config->pin_d3,
-            config->pin_d2,
-            config->pin_d1,
-            config->pin_d0,
-            config->pin_vsync,
-            config->pin_href,
-            config->pin_pclk
-    };
+        config->pin_d7,
+        config->pin_d6,
+        config->pin_d5,
+        config->pin_d4,
+        config->pin_d3,
+        config->pin_d2,
+        config->pin_d1,
+        config->pin_d0,
+        config->pin_vsync,
+        config->pin_href,
+        config->pin_pclk};
     gpio_config_t conf = {
-            .mode = GPIO_MODE_INPUT,
-            .pull_up_en = GPIO_PULLUP_ENABLE,
-            .pull_down_en = GPIO_PULLDOWN_DISABLE,
-            .intr_type = GPIO_INTR_DISABLE
-    };
-    for (int i = 0; i < sizeof(pins) / sizeof(gpio_num_t); ++i) {
-        if (rtc_gpio_is_valid_gpio(pins[i])) {
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE};
+    for (int i = 0; i < sizeof(pins) / sizeof(gpio_num_t); ++i)
+    {
+        if (rtc_gpio_is_valid_gpio(pins[i]))
+        {
             rtc_gpio_deinit(pins[i]);
         }
         conf.pin_bit_mask = 1LL << pins[i];
@@ -603,10 +654,9 @@ static void i2s_init()
 
     // Allocate I2S interrupt, keep it disabled
     esp_intr_alloc(ETS_I2S0_INTR_SOURCE,
-    ESP_INTR_FLAG_INTRDISABLED | ESP_INTR_FLAG_LEVEL1 | ESP_INTR_FLAG_IRAM,
-            &i2s_isr, NULL, &s_state->i2s_intr_handle);
+                   ESP_INTR_FLAG_INTRDISABLED | ESP_INTR_FLAG_LEVEL1 | ESP_INTR_FLAG_IRAM,
+                   &i2s_isr, NULL, &s_state->i2s_intr_handle);
 }
-
 
 static void i2s_stop()
 {
@@ -622,20 +672,23 @@ static void i2s_stop()
 static void i2s_run()
 {
 #ifndef _NDEBUG
-    for (int i = 0; i < s_state->dma_desc_count; ++i) {
-        lldesc_t* d = &s_state->dma_desc[i];
+    for (int i = 0; i < s_state->dma_desc_count; ++i)
+    {
+        lldesc_t *d = &s_state->dma_desc[i];
         ESP_LOGV(TAG, "DMA desc %2d: %u %u %u %u %u %u %p %p",
-                i, d->length, d->size, d->offset, d->eof, d->sosf, d->owner, d->buf, d->qe.stqe_next);
+                 i, d->length, d->size, d->offset, d->eof, d->sosf, d->owner, d->buf, d->qe.stqe_next);
         memset(s_state->dma_buf[i], 0, d->length);
     }
 #endif
 
     // wait for vsync
     ESP_LOGD(TAG, "Waiting for positive edge on VSYNC");
-    while (gpio_get_level(s_state->config.pin_vsync) == 0) {
+    while (gpio_get_level(s_state->config.pin_vsync) == 0)
+    {
         ;
     }
-    while (gpio_get_level(s_state->config.pin_vsync) != 0) {
+    while (gpio_get_level(s_state->config.pin_vsync) != 0)
+    {
         ;
     }
     ESP_LOGD(TAG, "Got VSYNC");
@@ -648,57 +701,62 @@ static void i2s_run()
     i2s_conf_reset();
 
     I2S0.rx_eof_num = s_state->dma_sample_count;
-    I2S0.in_link.addr = (uint32_t) &s_state->dma_desc[0];
+    I2S0.in_link.addr = (uint32_t)&s_state->dma_desc[0];
     I2S0.in_link.start = 1;
     I2S0.int_clr.val = I2S0.int_raw.val;
     I2S0.int_ena.val = 0;
     I2S0.int_ena.in_done = 1;
     esp_intr_enable(s_state->i2s_intr_handle);
-    if (s_state->config.pixel_format == CAMERA_PF_JPEG) {
+    if (s_state->config.pixel_format == CAMERA_PF_JPEG)
+    {
         vsync_intr_enable();
     }
     I2S0.conf.rx_start = 1;
-
 }
 
-static void IRAM_ATTR signal_dma_buf_received(bool* need_yield)
+static void IRAM_ATTR signal_dma_buf_received(bool *need_yield)
 {
     size_t dma_desc_filled = s_state->dma_desc_cur;
     s_state->dma_desc_cur = (dma_desc_filled + 1) % s_state->dma_desc_count;
     s_state->dma_received_count++;
     BaseType_t higher_priority_task_woken;
     BaseType_t ret = xQueueSendFromISR(s_state->data_ready, &dma_desc_filled, &higher_priority_task_woken);
-    if (ret != pdTRUE) {
+    if (ret != pdTRUE)
+    {
         ESP_EARLY_LOGW(TAG, "queue send failed (%d), dma_received_count=%d", ret, s_state->dma_received_count);
     }
     *need_yield = (ret == pdTRUE && higher_priority_task_woken == pdTRUE);
 }
 
-static void IRAM_ATTR i2s_isr(void* arg)
+static void IRAM_ATTR i2s_isr(void *arg)
 {
     I2S0.int_clr.val = I2S0.int_raw.val;
     bool need_yield;
     signal_dma_buf_received(&need_yield);
     ESP_EARLY_LOGV(TAG, "isr, cnt=%d", s_state->dma_received_count);
-    if (s_state->dma_received_count == s_state->height * s_state->dma_per_line) {
+    if (s_state->dma_received_count == s_state->height * s_state->dma_per_line)
+    {
         i2s_stop();
     }
-    if (need_yield) {
+    if (need_yield)
+    {
         portYIELD_FROM_ISR();
     }
 }
 
-static void IRAM_ATTR gpio_isr(void* arg)
+static void IRAM_ATTR gpio_isr(void *arg)
 {
     bool need_yield = false;
     ESP_EARLY_LOGV(TAG, "gpio isr, cnt=%d", s_state->dma_received_count);
     if (gpio_get_level(s_state->config.pin_vsync) == 0 &&
-            s_state->dma_received_count > 0 &&
-            !s_state->dma_done) {
+        s_state->dma_received_count > 0 &&
+        !s_state->dma_done)
+    {
         signal_dma_buf_received(&need_yield);
         i2s_stop();
     }
-    if (need_yield) {
+    if (need_yield)
+    {
         portYIELD_FROM_ISR();
     }
 }
@@ -706,15 +764,17 @@ static void IRAM_ATTR gpio_isr(void* arg)
 static size_t get_fb_pos()
 {
     return s_state->dma_filtered_count * s_state->width *
-            s_state->fb_bytes_per_pixel / s_state->dma_per_line;
+           s_state->fb_bytes_per_pixel / s_state->dma_per_line;
 }
 
 static void IRAM_ATTR dma_filter_task(void *pvParameters)
 {
-    while (true) {
+    while (true)
+    {
         size_t buf_idx;
         xQueueReceive(s_state->data_ready, &buf_idx, portMAX_DELAY);
-        if (buf_idx == SIZE_MAX) {
+        if (buf_idx == SIZE_MAX)
+        {
             s_state->data_size = get_fb_pos();
             xSemaphoreGive(s_state->frame_ready);
             continue;
@@ -722,22 +782,23 @@ static void IRAM_ATTR dma_filter_task(void *pvParameters)
 
         size_t fb_pos = get_fb_pos();
         assert(fb_pos <= s_state->fb_size + s_state->width *
-                s_state->fb_bytes_per_pixel / s_state->dma_per_line);
+                                                s_state->fb_bytes_per_pixel / s_state->dma_per_line);
 
-        uint8_t* pfb = s_state->fb + fb_pos;
-        const dma_elem_t* buf = s_state->dma_buf[buf_idx];
-        lldesc_t* desc = &s_state->dma_desc[buf_idx];
+        uint8_t *pfb = s_state->fb + fb_pos;
+        const dma_elem_t *buf = s_state->dma_buf[buf_idx];
+        lldesc_t *desc = &s_state->dma_desc[buf_idx];
         (*s_state->dma_filter)(buf, desc, pfb);
         s_state->dma_filtered_count++;
         ESP_LOGV(TAG, "dma_flt: flt_count=%d ", s_state->dma_filtered_count);
     }
 }
 
-static void IRAM_ATTR dma_filter_grayscale(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst)
+static void IRAM_ATTR dma_filter_grayscale(const dma_elem_t *src, lldesc_t *dma_desc, uint8_t *dst)
 {
     assert(s_state->sampling_mode == SM_0A0B_0C0D);
     size_t end = dma_desc->length / sizeof(dma_elem_t) / 4;
-    for (size_t i = 0; i < end; ++i) {
+    for (size_t i = 0; i < end; ++i)
+    {
         // manually unrolling 4 iterations of the loop here
         dst[0] = src[0].sample1;
         dst[1] = src[1].sample1;
@@ -748,11 +809,12 @@ static void IRAM_ATTR dma_filter_grayscale(const dma_elem_t* src, lldesc_t* dma_
     }
 }
 
-static void IRAM_ATTR dma_filter_grayscale_highspeed(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst)
+static void IRAM_ATTR dma_filter_grayscale_highspeed(const dma_elem_t *src, lldesc_t *dma_desc, uint8_t *dst)
 {
     assert(s_state->sampling_mode == SM_0A0B_0B0C);
     size_t end = dma_desc->length / sizeof(dma_elem_t) / 8;
-    for (size_t i = 0; i < end; ++i) {
+    for (size_t i = 0; i < end; ++i)
+    {
         // manually unrolling 4 iterations of the loop here
         dst[0] = src[0].sample1;
         dst[1] = src[2].sample1;
@@ -762,19 +824,21 @@ static void IRAM_ATTR dma_filter_grayscale_highspeed(const dma_elem_t* src, llde
         dst += 4;
     }
     // the final sample of a line in SM_0A0B_0B0C sampling mode needs special handling
-    if ((dma_desc->length & 0x7) != 0) {
+    if ((dma_desc->length & 0x7) != 0)
+    {
         dst[0] = src[0].sample1;
         dst[1] = src[2].sample1;
     }
 }
 
-static void IRAM_ATTR dma_filter_jpeg(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst)
+static void IRAM_ATTR dma_filter_jpeg(const dma_elem_t *src, lldesc_t *dma_desc, uint8_t *dst)
 {
     assert(s_state->sampling_mode == SM_0A0B_0B0C ||
-           s_state->sampling_mode == SM_0A00_0B00 );
+           s_state->sampling_mode == SM_0A00_0B00);
     size_t end = dma_desc->length / sizeof(dma_elem_t) / 4;
     // manually unrolling 4 iterations of the loop here
-    for (size_t i = 0; i < end; ++i) {
+    for (size_t i = 0; i < end; ++i)
+    {
         dst[0] = src[0].sample1;
         dst[1] = src[1].sample1;
         dst[2] = src[2].sample1;
@@ -783,7 +847,8 @@ static void IRAM_ATTR dma_filter_jpeg(const dma_elem_t* src, lldesc_t* dma_desc,
         dst += 4;
     }
     // the final sample of a line in SM_0A0B_0B0C sampling mode needs special handling
-    if ((dma_desc->length & 0x7) != 0) {
+    if ((dma_desc->length & 0x7) != 0)
+    {
         dst[0] = src[0].sample1;
         dst[1] = src[1].sample1;
         dst[2] = src[2].sample1;
@@ -791,29 +856,31 @@ static void IRAM_ATTR dma_filter_jpeg(const dma_elem_t* src, lldesc_t* dma_desc,
     }
 }
 
-static inline void rgb565_to_888(uint8_t in1, uint8_t in2, uint8_t* dst)
+static inline void rgb565_to_888(uint8_t in1, uint8_t in2, uint8_t *dst)
 {
-    dst[0] = (in2 & 0b00011111) << 3; // blue
+    dst[0] = (in2 & 0b00011111) << 3;                          // blue
     dst[1] = ((in1 & 0b111) << 5) | ((in2 & 0b11100000 >> 5)); // green
-    dst[2] = in1 & 0b11111000; // red
+    dst[2] = in1 & 0b11111000;                                 // red
 }
 
-static void IRAM_ATTR dma_filter_rgb565(const dma_elem_t* src, lldesc_t* dma_desc, uint8_t* dst)
+static void IRAM_ATTR dma_filter_rgb565(const dma_elem_t *src, lldesc_t *dma_desc, uint8_t *dst)
 {
     assert(s_state->sampling_mode == SM_0A0B_0B0C ||
            s_state->sampling_mode == SM_0A00_0B00);
 
-    const int unroll = 2;         // manually unrolling 2 iterations of the loop
+    const int unroll = 2; // manually unrolling 2 iterations of the loop
     const int samples_per_pixel = 2;
     const int bytes_per_pixel = 3;
     size_t end = dma_desc->length / sizeof(dma_elem_t) / unroll / samples_per_pixel;
-    for (size_t i = 0; i < end; ++i) {
+    for (size_t i = 0; i < end; ++i)
+    {
         rgb565_to_888(src[0].sample1, src[1].sample1, &dst[0]);
         rgb565_to_888(src[2].sample1, src[3].sample1, &dst[3]);
         dst += bytes_per_pixel * unroll;
         src += samples_per_pixel * unroll;
     }
-    if ((dma_desc->length & 0x7) != 0) {
+    if ((dma_desc->length & 0x7) != 0)
+    {
         rgb565_to_888(src[0].sample1, src[1].sample1, &dst[0]);
         rgb565_to_888(src[2].sample1, src[2].sample2, &dst[3]);
     }

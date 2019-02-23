@@ -1,10 +1,10 @@
 /**
  * Based on https://github.com/mic159/m5cam
- * 
- * Reads an 2image from the camera and servers it to a connected client.
+ *
+ * Reads an image from the camera and servers it to a connected client.
  * Starts a webserver and starts streaming when a client connects
- * 
- * After the device has started change your computer's WiFi to m5cam 
+ *
+ * After the device has started change your computer's WiFi to m5cam
  * and open the browser at http://192.168.4.1 for a stream
  * or http://192.168.4.1/camera for a still picture
  */
@@ -36,9 +36,11 @@
 #define CAMERA_PIXEL_FORMAT CAMERA_PF_GRAYSCALE
 #define CAMERA_FRAME_SIZE CAMERA_FS_SVGA
 #define CAMERA_LED_GPIO 16
-#define GROVE3 4
+// these are the Pinouts of the Grove connector on the board
+// using GROVE3 as future Trigger line (INPUT)
+#define GROVE3 13
+// using GROVE4 as OUTPUT (flash)
 #define GROVE4 4
-
 
 #include <WiFi.h>
 #include <esp_wifi.h>
@@ -51,93 +53,99 @@ WiFiServer server(80);
 void serve()
 {
   WiFiClient client = server.available();
-  if (client) 
+  if (client)
   {
     //Serial.println("New Client.");
     String currentLine = "";
-    while (client.connected()) 
+    while (client.connected())
     {
-      if (client.available()) 
+      if (client.available())
       {
         char c = client.read();
         //Serial.write(c);
-        if (c == '\n') 
+        if (c == '\n')
         {
-          if (currentLine.length() == 0) 
+          if (currentLine.length() == 0)
           {
             client.println("HTTP/1.1 200 OK");
             client.println("Content-type:text/html");
             client.println();
             client.print(
-              "<style>body{margin: 0}\nimg{height: 100%; width: auto}</style>"
-              "<img id='a' src='/camera' onload='this.style.display=\"initial\"; var b = document.getElementById(\"b\"); b.style.display=\"none\"; b.src=\"camera?\"+Date.now(); '>"
-              "<img id='b' style='display: none' src='/camera' onload='this.style.display=\"initial\"; var a = document.getElementById(\"a\"); a.style.display=\"none\"; a.src=\"camera?\"+Date.now(); '>");
+                "<style>body{margin: 0}\nimg{height: 100%; width: auto}</style>"
+                "<img id='a' src='/camera' onload='this.style.display=\"initial\"; var b = document.getElementById(\"b\"); b.style.display=\"none\"; b.src=\"camera?\"+Date.now(); '>"
+                "<img id='b' style='display: none' src='/camera' onload='this.style.display=\"initial\"; var a = document.getElementById(\"a\"); a.style.display=\"none\"; a.src=\"camera?\"+Date.now(); '>");
             client.println();
             break;
-          } 
-          else 
+          }
+          else
           {
             currentLine = "";
           }
-        } 
-        else if (c != '\r') 
+        }
+        else if (c != '\r')
         {
           currentLine += c;
         }
 
-        if(currentLine.endsWith("GET /expmanual"))
+        if (currentLine.endsWith("GET /waitForTrigger"))
         {
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println();
-            client.print("Setting Manual Exposure");
-            client.println();
-            break;
-  
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-type:image/jpeg");
+          client.println();
 
+          while(digitalRead(GROVE3)== 0){
+
+          }
+          digitalWrite(GROVE4, HIGH);
+          digitalWrite(CAMERA_LED_GPIO, HIGH);
+          esp_err_t err = camera_run();
+          if (err != ESP_OK)
+          {
+            ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
+            return;
+          }
+
+          size_t frame_size = camera_get_data_size();
+          uint8_t *fb = camera_get_fb();
+          uint8_t yavg = camera_get_yavg();
+
+          digitalWrite(CAMERA_LED_GPIO, LOW);
+          digitalWrite(GROVE4, LOW);
+
+          client.write(fb, frame_size);
         }
-        
-        if(currentLine.endsWith("GET /camera"))
+
+        if (currentLine.endsWith("GET /camera"))
         {
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:image/jpeg");
-            client.println();
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-type:image/jpeg");
+          client.println();
 
-              digitalWrite(GROVE4, HIGH);
-              digitalWrite(CAMERA_LED_GPIO, HIGH);
-            
-              esp_err_t err = camera_run();
-              if (err != ESP_OK) {
-                  ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
-                  return;
-              }
-            
-              size_t frame_size = camera_get_data_size();
-              
-              uint8_t* fb = camera_get_fb();
-              
-              uint8_t yavg=camera_get_yavg();
-              Serial.print("yAVG:");
-              Serial.print(yavg);
-              
-              digitalWrite(CAMERA_LED_GPIO, LOW);
+          digitalWrite(GROVE4, HIGH);
+          digitalWrite(CAMERA_LED_GPIO, HIGH);
+          esp_err_t err = camera_run();
+          if (err != ESP_OK)
+          {
+            ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
+            return;
+          }
 
-              digitalWrite(GROVE4, LOW);
+          size_t frame_size = camera_get_data_size();
+          uint8_t *fb = camera_get_fb();
+          uint8_t yavg = camera_get_yavg();
 
+          digitalWrite(CAMERA_LED_GPIO, LOW);
+          digitalWrite(GROVE4, LOW);
 
-              client.write(fb, frame_size);
-              
-
+          client.write(fb, frame_size);
         }
       }
     }
     // close the connection:
     client.stop();
     //Serial.println("Client Disconnected.");
-  }  
+  }
 }
-
-
 
 static camera_pixelformat_t s_pixel_format;
 bool video_running = false;
@@ -145,38 +153,20 @@ bool video_running = false;
 int udp_server = -1;
 struct sockaddr_in destination;
 
-
-void setup() {
+void setup()
+{
   esp_log_level_set("camera", ESP_LOG_DEBUG);
   Serial.begin(115200);
   esp_err_t err;
 
   ESP_ERROR_CHECK(gpio_install_isr_service(0));
   pinMode(CAMERA_LED_GPIO, OUTPUT);
-  pinMode(GROVE3, OUTPUT);
+  pinMode(GROVE3, INPUT);
+  pinMode(GROVE4, OUTPUT);
 
   digitalWrite(GROVE4, HIGH);
   delay(20);
   digitalWrite(GROVE4, LOW);
-/*
-  for (int i=1;i<30;i++){
-      pinMode(i, OUTPUT);
-      for (int j=0;j<i;j++){
-        digitalWrite(i,HIGH);
-        delay(200);
-        digitalWrite(i,LOW);
-        delay(200);
-
-        }
-      delay(1000);
-    
-    pinMode(i,INPUT);
-    }
-
-
-
-  return;
-  */
   WiFi.disconnect(true);
 
   camera_config_t camera_config;
@@ -201,38 +191,44 @@ void setup() {
 
   camera_model_t camera_model;
   err = camera_probe(&camera_config, &camera_model);
-  if (err != ESP_OK) {
-      return;
+  if (err != ESP_OK)
+  {
+    return;
   }
 
-  if (camera_model == CAMERA_OV7725) {
-      s_pixel_format = CAMERA_PIXEL_FORMAT;
-      camera_config.frame_size = CAMERA_FRAME_SIZE;
-      
-      ESP_LOGI(TAG, "Detected OV7725 camera, using %s bitmap format",
-              CAMERA_PIXEL_FORMAT == CAMERA_PF_GRAYSCALE ?
-                      "grayscale" : "RGB565");
-  } else if (camera_model == CAMERA_OV2640) {
-      ESP_LOGI(TAG, "Detected OV2640 camera, using JPEG format");
-      s_pixel_format = CAMERA_PF_JPEG;
-      //s_pixel_format =  CAMERA_PF_GRAYSCALE;
-      camera_config.frame_size = CAMERA_FRAME_SIZE;
-      camera_config.jpeg_quality = 10;
-  } else {
-      ESP_LOGE(TAG, "Camera not supported");
-      return;
+  if (camera_model == CAMERA_OV7725)
+  {
+    s_pixel_format = CAMERA_PIXEL_FORMAT;
+    camera_config.frame_size = CAMERA_FRAME_SIZE;
+
+    ESP_LOGI(TAG, "Detected OV7725 camera, using %s bitmap format",
+             CAMERA_PIXEL_FORMAT == CAMERA_PF_GRAYSCALE ? "grayscale" : "RGB565");
+  }
+  else if (camera_model == CAMERA_OV2640)
+  {
+    ESP_LOGI(TAG, "Detected OV2640 camera, using JPEG format");
+    s_pixel_format = CAMERA_PF_JPEG;
+    camera_config.frame_size = CAMERA_FRAME_SIZE;
+    camera_config.jpeg_quality = 10;
+  }
+  else
+  {
+    ESP_LOGE(TAG, "Camera not supported");
+    return;
   }
 
   camera_config.pixel_format = s_pixel_format;
   err = camera_init(&camera_config);
-  if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Camera init failed with error 0x%x", err);
-      return;
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(TAG, "Camera init failed with error 0x%x", err);
+    return;
   }
   Serial.println("done setup");
 
-  const char * ssid="***";
-  const char * password="***";
+//     Use this part when we set it up as a client to an access point
+  const char * ssid="NETGEAR85";
+  const char * password="silentflute172";
 
 // Set your Static IP address
 IPAddress local_IP(10,1,10,201);
@@ -247,7 +243,7 @@ IPAddress secondaryDNS(8, 8, 4, 4); //optional
 if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
     Serial.println("STA Failed to configure");
   }
-  
+
 
 
     Serial.print("Connecting to ");
@@ -255,7 +251,7 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
 
     WiFi.begin(ssid, password);
   // Configures static IP address
-  
+
     while (WiFi.status() != WL_CONNECTED) {
         delay(100);
         Serial.print(".");
@@ -266,17 +262,17 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
 
+/*
+  //  ESP_LOGI("Starting WiFi AP m5cam");
+  WiFi.softAP("m5cam");
 
-//  ESP_LOGI("Starting WiFi AP m5cam");
- // WiFi.softAP("m5cam");
-
- // Serial.print("IP address: ");
- // Serial.println(WiFi.localIP());
-
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+*/
   server.begin();
 }
 
-
-void loop() {
+void loop()
+{
   serve();
 }
