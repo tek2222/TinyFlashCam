@@ -46,6 +46,7 @@
 #include <WebServer.h>     // Replace with WebServer.h for ESP32
 #include <AutoConnect.h>
 #include <Update.h>
+#include <ESPmDNS.h>
 
 
 
@@ -91,7 +92,7 @@ const char* updatepage =
 
 WebServer server;
 AutoConnect Portal(server);
-
+  
 static camera_pixelformat_t s_pixel_format;
 bool video_running=false;
 
@@ -269,6 +270,11 @@ void setup() {
   });
   
   if (Portal.begin()) {
+    if (MDNS.begin("TinyFlashCam")) {
+      MDNS.addService("http", "tcp", 80);
+    Serial.println("mdns started: ");
+    }
+
     Serial.println("WiFi connected: " + WiFi.localIP().toString());
   }
 }
