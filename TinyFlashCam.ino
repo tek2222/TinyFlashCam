@@ -1,13 +1,8 @@
 /**
  * Based on https://github.com/mic159/m5cam
- *
- * Reads an image from the camera and servers it to a connected client.
- * Starts a webserver and starts streaming when a client connects
- *
- * After the device has started change your computer's WiFi to m5cam
- * and open the browser at http://192.168.4.1 for a stream
- * or http://192.168.4.1/camera for a still picture
  */
+
+
 //#define CONFIG_ENABLE_TEST_PATTERN N
 #define CONFIG_OV2640_SUPPORT y
 //#define CONFIG_OV7725_SUPPORT y
@@ -48,113 +43,132 @@
 #include <lwip/sockets.h>
 #include "camera.h"
 
-WiFiServer server(80);
+#include <WebServer.h>     // Replace with WebServer.h for ESP32
+#include <AutoConnect.h>
+#include <Update.h>
 
-void serve()
-{
-  WiFiClient client = server.available();
-  if (client)
-  {
-    //Serial.println("New Client.");
-    String currentLine = "";
-    while (client.connected())
-    {
-      if (client.available())
-      {
-        char c = client.read();
-        //Serial.write(c);
-        if (c == '\n')
-        {
-          if (currentLine.length() == 0)
-          {
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println();
-            client.print(
-                "<style>body{margin: 0}\nimg{height: 100%; width: auto}</style>"
-                "<img id='a' src='/camera' onload='this.style.display=\"initial\"; var b = document.getElementById(\"b\"); b.style.display=\"none\"; b.src=\"camera?\"+Date.now(); '>"
-                "<img id='b' style='display: none' src='/camera' onload='this.style.display=\"initial\"; var a = document.getElementById(\"a\"); a.style.display=\"none\"; a.src=\"camera?\"+Date.now(); '>");
-            client.println();
-            break;
-          }
-          else
-          {
-            currentLine = "";
-          }
-        }
-        else if (c != '\r')
-        {
-          currentLine += c;
-        }
 
-        if (currentLine.endsWith("GET /waitForTrigger"))
-        {
-          client.println("HTTP/1.1 200 OK");
-          client.println("Content-type:image/jpeg");
-          client.println();
 
-          while(digitalRead(GROVE3)== 0){
 
-          }
-          digitalWrite(GROVE4, HIGH);
-          digitalWrite(CAMERA_LED_GPIO, HIGH);
-          esp_err_t err = camera_run();
-          if (err != ESP_OK)
-          {
-            ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
-            return;
-          }
+const char* updatepage = 
+"<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
+"<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
+   "<input type='file' name='update'>"
+        "<input type='submit' value='Update'>"
+    "</form>"
+ "<div id='prg'>progress: 0%</div>"
+ "<script>"
+  "$('form').submit(function(e){"
+  "e.preventDefault();"
+  "var form = $('#upload_form')[0];"
+  "var data = new FormData(form);"
+  " $.ajax({"
+  "url: '/postupdate',"
+  "type: 'POST',"
+  "data: data,"
+  "contentType: false,"
+  "processData:false,"
+  "xhr: function() {"
+  "var xhr = new window.XMLHttpRequest();"
+  "xhr.upload.addEventListener('progress', function(evt) {"
+  "if (evt.lengthComputable) {"
+  "var per = evt.loaded / evt.total;"
+  "$('#prg').html('progress: ' + Math.round(per*100) + '%');"
+  "}"
+  "}, false);"
+  "return xhr;"
+  "},"
+  "success:function(d, s) {"
+  "console.log('success!')" 
+ "},"
+ "error: function (a, b, c) {"
+ "}"
+ "});"
+ "});"
+ "</script>";
 
-          size_t frame_size = camera_get_data_size();
-          uint8_t *fb = camera_get_fb();
-          uint8_t yavg = camera_get_yavg();
 
-          digitalWrite(CAMERA_LED_GPIO, LOW);
-          digitalWrite(GROVE4, LOW);
 
-          client.write(fb, frame_size);
-        }
-
-        if (currentLine.endsWith("GET /camera"))
-        {
-          client.println("HTTP/1.1 200 OK");
-          client.println("Content-type:image/jpeg");
-          client.println();
-
-          digitalWrite(GROVE4, HIGH);
-          digitalWrite(CAMERA_LED_GPIO, HIGH);
-          esp_err_t err = camera_run();
-          if (err != ESP_OK)
-          {
-            ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
-            return;
-          }
-
-          size_t frame_size = camera_get_data_size();
-          uint8_t *fb = camera_get_fb();
-          uint8_t yavg = camera_get_yavg();
-
-          digitalWrite(CAMERA_LED_GPIO, LOW);
-          digitalWrite(GROVE4, LOW);
-
-          client.write(fb, frame_size);
-        }
-      }
-    }
-    // close the connection:
-    client.stop();
-    //Serial.println("Client Disconnected.");
-  }
-}
+WebServer server;
+AutoConnect Portal(server);
 
 static camera_pixelformat_t s_pixel_format;
-bool video_running = false;
+bool video_running=false;
 
-int udp_server = -1;
-struct sockaddr_in destination;
+void rootPage() {
 
-void setup()
-{
+  char content[] = "TinyFlashCam M5";
+  server.send(200, "text/plain", content);
+}
+
+void freerun(){
+  WiFiClient client = server.client();
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-type:text/html");
+  client.println();
+  client.print("<style>body{margin: 0}\nimg{height: 100%; width: auto}</style>"
+                "<img id='a' src='/camera' onload='this.style.display=\"initial\"; var b = document.getElementById(\"b\"); b.style.display=\"none\"; b.src=\"camera?\"+Date.now(); '>"
+                "<img id='b' style='display: none' src='/camera' onload='this.style.display=\"initial\"; var a = document.getElementById(\"a\"); a.style.display=\"none\"; a.src=\"camera?\"+Date.now(); '>");
+  client.println();
+}
+
+void camera() {
+  WiFiClient client = server.client();
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-type:image/jpeg");
+  client.println();
+  
+  digitalWrite(GROVE4, HIGH);
+  digitalWrite(CAMERA_LED_GPIO, HIGH);
+  esp_err_t err = camera_run();
+  if (err != ESP_OK)
+  {
+    ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
+    return;
+  }
+  
+  size_t frame_size = camera_get_data_size();
+  uint8_t *fb = camera_get_fb();
+  uint8_t yavg = camera_get_yavg();
+  
+  digitalWrite(CAMERA_LED_GPIO, LOW);
+  digitalWrite(GROVE4, LOW);
+  
+  client.write(fb, frame_size);
+}
+
+
+
+
+void waitForTrigger() {
+  WiFiClient client = server.client();
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-type:image/jpeg");
+  client.println();
+  while(digitalRead(GROVE3)== 0){
+  }
+  digitalWrite(GROVE4, HIGH);
+  digitalWrite(CAMERA_LED_GPIO, HIGH);
+  esp_err_t err = camera_run();
+  if (err != ESP_OK)
+  {
+    ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
+    return;
+  }
+  
+  size_t frame_size = camera_get_data_size();
+  uint8_t *fb = camera_get_fb();
+  uint8_t yavg = camera_get_yavg();
+  
+  digitalWrite(CAMERA_LED_GPIO, LOW);
+  digitalWrite(GROVE4, LOW);
+  
+  client.write(fb, frame_size);
+}
+
+
+
+void setup() {
   esp_log_level_set("camera", ESP_LOG_DEBUG);
   Serial.begin(115200);
   esp_err_t err;
@@ -196,15 +210,7 @@ void setup()
     return;
   }
 
-  if (camera_model == CAMERA_OV7725)
-  {
-    s_pixel_format = CAMERA_PIXEL_FORMAT;
-    camera_config.frame_size = CAMERA_FRAME_SIZE;
-
-    ESP_LOGI(TAG, "Detected OV7725 camera, using %s bitmap format",
-             CAMERA_PIXEL_FORMAT == CAMERA_PF_GRAYSCALE ? "grayscale" : "RGB565");
-  }
-  else if (camera_model == CAMERA_OV2640)
+  if (camera_model == CAMERA_OV2640)
   {
     ESP_LOGI(TAG, "Detected OV2640 camera, using JPEG format");
     s_pixel_format = CAMERA_PF_JPEG;
@@ -224,55 +230,50 @@ void setup()
     ESP_LOGE(TAG, "Camera init failed with error 0x%x", err);
     return;
   }
-  Serial.println("done setup");
+  Serial.println("Camera done setup");
+  Serial.println();
 
-//     Use this part when we set it up as a client to an access point
-  const char * ssid="NETGEAR85";
-  const char * password="silentflute172";
+  server.on("/", rootPage);
+  server.on("/camera", camera);
+  server.on("/waitForTrigger", waitForTrigger);
+  server.on("/freerun", freerun);
 
-// Set your Static IP address
-IPAddress local_IP(10,1,10,201);
-// Set your Gateway IP address
-IPAddress gateway(10,1,10,1);
+  server.on("/update", HTTP_GET, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/html", updatepage);
+  });
 
-IPAddress subnet(255, 255, 255, 0);
-IPAddress primaryDNS(8, 8, 8, 8);   //optional
-IPAddress secondaryDNS(8, 8, 4, 4); //optional
-
-
-if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
-    Serial.println("STA Failed to configure");
-  }
-
-
-
-    Serial.print("Connecting to ");
-    Serial.println(ssid);
-
-    WiFi.begin(ssid, password);
-  // Configures static IP address
-
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(100);
-        Serial.print(".");
+  server.on("/postupdate", HTTP_POST, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+    ESP.restart();
+  }, []() {
+    HTTPUpload& upload = server.upload();
+    if (upload.status == UPLOAD_FILE_START) {
+      Serial.printf("Update: %s\n", upload.filename.c_str());
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { //start with max available size
+        Update.printError(Serial);
+      }
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+      /* flashing firmware to ESP*/
+      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+        Update.printError(Serial);
+      }
+    } else if (upload.status == UPLOAD_FILE_END) {
+      if (Update.end(true)) { //true to set the size to the current progress
+        Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+      } else {
+        Update.printError(Serial);
+      }
     }
-
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-
-/*
-  //  ESP_LOGI("Starting WiFi AP m5cam");
-  WiFi.softAP("m5cam");
-
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-*/
-  server.begin();
+  });
+  
+  if (Portal.begin()) {
+    Serial.println("WiFi connected: " + WiFi.localIP().toString());
+  }
 }
 
-void loop()
-{
-  serve();
+void loop() {
+    Portal.handleClient();
 }
+
