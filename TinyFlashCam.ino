@@ -46,10 +46,6 @@
 #include <WebServer.h>     // Replace with WebServer.h for ESP32
 #include <AutoConnect.h>
 #include <Update.h>
-#include <ESPmDNS.h>
-
-
-
 
 const char* updatepage = 
 "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
@@ -88,7 +84,8 @@ const char* updatepage =
  "});"
  "</script>";
 
-
+char content[] = "TinyFlashCam M5";
+  
 
 WebServer server;
 AutoConnect Portal(server);
@@ -96,14 +93,18 @@ AutoConnect Portal(server);
 static camera_pixelformat_t s_pixel_format;
 bool video_running=false;
 
+
+uint8_t *fb;
+size_t frame_size;
+WiFiClient client;
+
 void rootPage() {
 
-  char content[] = "TinyFlashCam M5";
   server.send(200, "text/plain", content);
 }
 
 void freerun(){
-  WiFiClient client = server.client();
+  client = server.client();
   client.println("HTTP/1.1 200 OK");
   client.println("Content-type:text/html");
   client.println();
@@ -114,7 +115,7 @@ void freerun(){
 }
 
 void camera() {
-  WiFiClient client = server.client();
+  client = server.client();
   client.println("HTTP/1.1 200 OK");
   client.println("Content-type:image/jpeg");
   client.println();
@@ -128,21 +129,22 @@ void camera() {
     return;
   }
   
-  size_t frame_size = camera_get_data_size();
-  uint8_t *fb = camera_get_fb();
-  uint8_t yavg = camera_get_yavg();
+  frame_size = camera_get_data_size();
+  fb = camera_get_fb();
   
   digitalWrite(CAMERA_LED_GPIO, LOW);
   digitalWrite(GROVE4, LOW);
   
   client.write(fb, frame_size);
+  client.stop();
+  heap_caps_print_heap_info(MALLOC_CAP_8BIT);
 }
 
 
 
 
 void waitForTrigger() {
-  WiFiClient client = server.client();
+  client = server.client();
   client.println("HTTP/1.1 200 OK");
   client.println("Content-type:image/jpeg");
   client.println();
@@ -157,9 +159,8 @@ void waitForTrigger() {
     return;
   }
   
-  size_t frame_size = camera_get_data_size();
-  uint8_t *fb = camera_get_fb();
-  uint8_t yavg = camera_get_yavg();
+  frame_size = camera_get_data_size();
+  fb = camera_get_fb();
   
   digitalWrite(CAMERA_LED_GPIO, LOW);
   digitalWrite(GROVE4, LOW);
@@ -270,11 +271,6 @@ void setup() {
   });
   
   if (Portal.begin()) {
-    if (MDNS.begin("TinyFlashCam")) {
-      MDNS.addService("http", "tcp", 80);
-    Serial.println("mdns started: ");
-    }
-
     Serial.println("WiFi connected: " + WiFi.localIP().toString());
   }
 }
