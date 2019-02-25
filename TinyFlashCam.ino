@@ -38,13 +38,14 @@
 #define GROVE4 4
 
 #include <WiFi.h>
-#include <esp_wifi.h>
+//#include <esp_wifi.h>
 #include <lwip/err.h>
 #include <lwip/sockets.h>
 #include "camera.h"
 
 #include <WebServer.h>     // Replace with WebServer.h for ESP32
 #include <AutoConnect.h>
+
 #include <Update.h>
 
 const char* updatepage = 
@@ -269,13 +270,28 @@ void setup() {
       }
     }
   });
-  
+
+  AutoConnectConfig Config;
+  Config.autoReconnect = true;
+  Portal.config(Config);
+
   if (Portal.begin()) {
     Serial.println("WiFi connected: " + WiFi.localIP().toString());
   }
 }
 
+/*
+void test_wifi() {
+  if (WiFi.status() != WL_CONNECTED)
+{
+  Portal.begin();
+}
+}
+*/
+
 void loop() {
     Portal.handleClient();
+    delay(1);
+  //  test_wifi();
 }
 
