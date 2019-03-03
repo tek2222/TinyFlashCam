@@ -90,7 +90,8 @@ char content[] = "TinyFlashCam M5";
 
 WebServer server;
 AutoConnect Portal(server);
-  
+AutoConnectConfig Config;
+   
 static camera_pixelformat_t s_pixel_format;
 bool video_running=false;
 
@@ -120,7 +121,25 @@ void camera() {
   client.println("HTTP/1.1 200 OK");
   client.println("Content-type:image/jpeg");
   client.println();
-  
+  acquire_frame();
+  client.write(fb, frame_size);
+  client.stop();
+  heap_caps_print_heap_info(MALLOC_CAP_8BIT);
+}
+
+void current() {
+  client = server.client();
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-type:image/jpeg");
+  client.println();
+  client.write(fb, frame_size);
+  client.stop();
+  heap_caps_print_heap_info(MALLOC_CAP_8BIT);
+}
+
+
+
+void acquire_frame(){
   digitalWrite(GROVE4, HIGH);
   digitalWrite(CAMERA_LED_GPIO, HIGH);
   esp_err_t err = camera_run();
@@ -135,12 +154,7 @@ void camera() {
   
   digitalWrite(CAMERA_LED_GPIO, LOW);
   digitalWrite(GROVE4, LOW);
-  
-  client.write(fb, frame_size);
-  client.stop();
-  heap_caps_print_heap_info(MALLOC_CAP_8BIT);
 }
-
 
 
 
@@ -238,6 +252,7 @@ void setup() {
 
   server.on("/", rootPage);
   server.on("/camera", camera);
+  server.on("/current", current);
   server.on("/waitForTrigger", waitForTrigger);
   server.on("/freerun", freerun);
 
@@ -271,7 +286,6 @@ void setup() {
     }
   });
 
-  AutoConnectConfig Config;
   Config.autoReconnect = true;
   Portal.config(Config);
 
@@ -288,10 +302,80 @@ void test_wifi() {
 }
 }
 */
+char c=0;
 
+
+
+
+void Menu() {
+  delay(1000);
+  Serial.setTimeout(10000);
+  String essid;   //Declare a String variable to hold your name
+  String pw;   //Declare a String variable to hold your name
+  int id1,id2,id3,id4;         //Declare an Int variable to hold your age
+  //float height;    //Declare a float variable to hold your height
+
+  while (Serial.available()!=0){
+  Serial.read();
+  }
+
+  Serial.println("ESSid:"); while (Serial.available()==0) {        }     //Wait for user input
+  essid=Serial.readStringUntil('\n');                 //Read user input into myName
+  Serial.println("pw:"); while (Serial.available()==0) {        }     //Wait for user input
+  pw=Serial.readStringUntil('\n');                 //Read user input into myName
+
+  Serial.print("Static IP:"); //Prompt User for input
+  while (Serial.available()==0) {          }   //Wait for user inpu}
+  id1=Serial.parseInt();                 //Read user input into myName
+  Serial.print(id1);Serial.print(".");
+ 
+   while (Serial.available()==0) {          };
+   id2=Serial.parseInt();                 //Read user input into myName
+  Serial.print(id2);Serial.print(".");
+  
+   while (Serial.available()==0) {          };
+  id3=Serial.parseInt();                 //Read user input into myName
+  Serial.print(id3);Serial.print(".");
+  
+   while (Serial.available()==0) {          };
+  id4=Serial.parseInt();                 //Read user input into myName
+  Serial.print(id4);Serial.println(" ");
+  Config.staip=IPAddress(id1,id2,id3,id4);
+  Config.netmask=IPAddress(255,255,255,0);
+  Serial.println("Connecting...");
+  Portal.config(Config);
+
+  if (Portal.begin(essid.c_str(),pw.c_str())) {
+    Serial.println("WiFi connected: " + WiFi.localIP().toString());
+  }
+
+}
+
+
+
+      
 void loop() {
     Portal.handleClient();
     delay(1);
-  //  test_wifi();
-}
 
+    // Trigger camera with pin 
+    if(digitalRead(GROVE3) != 0){
+      acquire_frame();
+      
+    }
+ 
+
+    if (Serial.available()>0){
+      Serial.readBytes(&c,1);
+      if (c=='i'){
+        Serial.println("TinyFlashCam Serial interface.");
+        Menu();
+      }
+      if (c=='a'){
+        Serial.println("aquiring image.");
+        acquire_frame();
+        }
+      }
+    
+    
+}
