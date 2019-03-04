@@ -78,15 +78,18 @@ void acquire_frame()
   digitalWrite(GROVE4, HIGH);
   digitalWrite(CAMERA_LED_GPIO, HIGH);
   esp_err_t err = camera_run();
+  
   if (err != ESP_OK)
   {
     ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
     return;
   }
-  frame_size = camera_get_data_size();
-  fb = camera_get_fb();
   digitalWrite(CAMERA_LED_GPIO, LOW);
   digitalWrite(GROVE4, LOW);
+  
+  frame_size = camera_get_data_size();
+  fb = camera_get_fb();
+  
 }
 
 void serve()
@@ -355,9 +358,11 @@ void setup()
   pinMode(GROVE4, OUTPUT);
 
   digitalWrite(GROVE4, HIGH);
+  digitalWrite(CAMERA_LED_GPIO, HIGH);
+  
   delay(20);
   digitalWrite(GROVE4, LOW);
-
+digitalWrite(CAMERA_LED_GPIO, LOW);
 
   camera_config_t camera_config;
   camera_config.ledc_channel = LEDC_CHANNEL_0;
@@ -460,6 +465,7 @@ void loop()
   {
     acquire_frame();
     Serial.println("Trigger.");
+    delay(200);
   }
 
   handleSerialInput();
