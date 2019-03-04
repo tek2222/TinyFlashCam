@@ -200,6 +200,74 @@ uint8_t get_state()
   return configmode;
 }
 
+
+void configure_wifi(){
+
+  WiFi.disconnect(true);
+
+
+  if (get_state() == 1)
+  {
+
+    loadCredentials();
+
+    if (creds.staticmode == 1)
+    {
+      Serial.println("Using Static IP");
+      // Set your Static IP address
+      IPAddress local_IP(creds.ip1, creds.ip2, creds.ip3, creds.ip4);
+      // Set your Gateway IP address
+      IPAddress gateway(10, 1, 10, 1);
+
+      IPAddress subnet(255, 255, 255, 0);
+      IPAddress primaryDNS(8, 8, 8, 8);   //optional
+      IPAddress secondaryDNS(8, 8, 4, 4); //optional
+      if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS))
+      {
+        Serial.println("STA Failed to configure");
+      }
+    }
+    else
+    {
+      Serial.println("Using DHCP");
+      if (!WiFi.begin())
+      {
+        Serial.println("STA Failed to configure");
+      }
+    }
+    Serial.print("Connecting to ");
+    Serial.println(creds.essid);
+
+    WiFi.begin(creds.essid, creds.pw);
+    // Configures static IP address
+
+    while (WiFi.status() != WL_CONNECTED)
+    {
+      delay(100);
+      handleSerialInput();
+      Serial.print(".");
+    }
+
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+  }
+  else
+  {
+
+    Serial.println("Starting WiFi AP m5cam");
+    WiFi.softAP("m5cam");
+    Serial.print("IP address: ");
+    IPAddress IP = WiFi.softAPIP();
+    Serial.println(IP);
+  }
+
+  server.begin();
+}
+
+
+
 void handleSerialInput()
 {
   if (Serial.available() > 0)
@@ -265,12 +333,15 @@ void handleSerialInput()
       {
         creds.state = 1; // set this creds state to configured.
         saveCredentials();
+        configure_wifi();
       }
       else
         Serial.println("Not saving.");
     }
   }
 }
+
+
 
 void setup()
 {
@@ -287,7 +358,6 @@ void setup()
   delay(20);
   digitalWrite(GROVE4, LOW);
 
-  WiFi.disconnect(true);
 
   camera_config_t camera_config;
   camera_config.ledc_channel = LEDC_CHANNEL_0;
@@ -347,64 +417,8 @@ void setup()
   }
   Serial.println("done camera setup");
 
-  if (get_state() == 1)
-  {
 
-    loadCredentials();
-
-    if (creds.staticmode == 1)
-    {
-      Serial.println("Using Static IP");
-      // Set your Static IP address
-      IPAddress local_IP(creds.ip1, creds.ip2, creds.ip3, creds.ip4);
-      // Set your Gateway IP address
-      IPAddress gateway(10, 1, 10, 1);
-
-      IPAddress subnet(255, 255, 255, 0);
-      IPAddress primaryDNS(8, 8, 8, 8);   //optional
-      IPAddress secondaryDNS(8, 8, 4, 4); //optional
-      if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS))
-      {
-        Serial.println("STA Failed to configure");
-      }
-    }
-    else
-    {
-      Serial.println("Using DHCP");
-      if (!WiFi.begin())
-      {
-        Serial.println("STA Failed to configure");
-      }
-    }
-    Serial.print("Connecting to ");
-    Serial.println(creds.essid);
-
-    WiFi.begin(creds.essid, creds.pw);
-    // Configures static IP address
-
-    while (WiFi.status() != WL_CONNECTED)
-    {
-      delay(100);
-      handleSerialInput();
-      Serial.print(".");
-    }
-
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-  }
-  else
-  {
-
-    Serial.println("Starting WiFi AP m5cam");
-    WiFi.softAP("m5cam");
-    Serial.print("IP address: ");
-    IPAddress IP = WiFi.softAPIP();
-    Serial.println(IP);
-  }
-
-  server.begin();
+configure_wifi();
 }
 
 /** Load WLAN credentials from EEPROM */
