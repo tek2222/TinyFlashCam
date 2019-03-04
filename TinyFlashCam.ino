@@ -231,8 +231,8 @@ void setup() {
   }
   Serial.println("done setup");
 
-  const char * ssid="***";
-  const char * password="***";
+  const char * ssid="NETGEAR85";
+  const char * password="silentflute172";
 
 // Set your Static IP address
 IPAddress local_IP(10,1,10,201);
@@ -279,4 +279,33 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
 
 void loop() {
   serve();
+}
+
+
+/** Load WLAN credentials from EEPROM */
+void loadCredentials() {
+  EEPROM.begin(512);
+  EEPROM.get(0, ssid);
+  EEPROM.get(0+sizeof(ssid), password);
+  char ok[2+1];
+  EEPROM.get(0+sizeof(ssid)+sizeof(password), ok);
+  EEPROM.end();
+  if (String(ok) != String("OK")) {
+    ssid[0] = 0;
+    password[0] = 0;
+  }
+  Serial.println("Recovered credentials:");
+  Serial.println(ssid);
+  Serial.println(strlen(password)>0?"********":"<no password>");
+}
+
+/** Store WLAN credentials to EEPROM */
+void saveCredentials() {
+  EEPROM.begin(512);
+  EEPROM.put(0, ssid);
+  EEPROM.put(0+sizeof(ssid), password);
+  char ok[2+1] = "OK";
+  EEPROM.put(0+sizeof(ssid)+sizeof(password), ok);
+  EEPROM.commit();
+  EEPROM.end();
 }
