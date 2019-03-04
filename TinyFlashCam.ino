@@ -47,18 +47,20 @@
 #include "camera.h"
 
 WiFiServer server(80);
-uint8_t* fb;
-size_t frame_size; 
+uint8_t *fb;
+size_t frame_size;
 
 //ssid and pw for eeprom. (mode 1)
 String essid;
 String password;
 
-enum state{
+enum state
+{
   CONFIGURED
-  };
+};
 
-struct credentials{
+struct credentials
+{
   char state;
   char essid[32];
   char pw[32];
@@ -71,118 +73,115 @@ struct credentials{
 
 credentials creds;
 
-void acquire_frame(){
-              digitalWrite(GROVE4, HIGH);
-              digitalWrite(CAMERA_LED_GPIO, HIGH);
-              esp_err_t err = camera_run();
-              if (err != ESP_OK) {
-                  ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
-                  return;
-              }
-              frame_size = camera_get_data_size();
-              fb = camera_get_fb();
-              digitalWrite(CAMERA_LED_GPIO, LOW);
-              digitalWrite(GROVE4, LOW);
+void acquire_frame()
+{
+  digitalWrite(GROVE4, HIGH);
+  digitalWrite(CAMERA_LED_GPIO, HIGH);
+  esp_err_t err = camera_run();
+  if (err != ESP_OK)
+  {
+    ESP_LOGW(TAG, "Camera capture failed with error = %d", err);
+    return;
   }
-
+  frame_size = camera_get_data_size();
+  fb = camera_get_fb();
+  digitalWrite(CAMERA_LED_GPIO, LOW);
+  digitalWrite(GROVE4, LOW);
+}
 
 void serve()
 {
   WiFiClient client = server.available();
-  if (client) 
+  if (client)
   {
     //Serial.println("New Client.");
     String currentLine = "";
-    while (client.connected()) 
+    while (client.connected())
     {
-      if (client.available()) 
+      if (client.available())
       {
         char c = client.read();
         //Serial.write(c);
-        if (c == '\n') 
+        if (c == '\n')
         {
-          if (currentLine.length() == 0) 
+          if (currentLine.length() == 0)
           {
             client.println("HTTP/1.1 200 OK");
             client.println("Content-type:text/html");
             client.println();
             client.print(
-              "<style>body{margin: 0}\nimg{height: 100%; width: auto}</style>"
-              "<img id='a' src='/camera' onload='this.style.display=\"initial\"; var b = document.getElementById(\"b\"); b.style.display=\"none\"; b.src=\"camera?\"+Date.now(); '>"
-              "<img id='b' style='display: none' src='/camera' onload='this.style.display=\"initial\"; var a = document.getElementById(\"a\"); a.style.display=\"none\"; a.src=\"camera?\"+Date.now(); '>");
+                "<style>body{margin: 0}\nimg{height: 100%; width: auto}</style>"
+                "<img id='a' src='/camera' onload='this.style.display=\"initial\"; var b = document.getElementById(\"b\"); b.style.display=\"none\"; b.src=\"camera?\"+Date.now(); '>"
+                "<img id='b' style='display: none' src='/camera' onload='this.style.display=\"initial\"; var a = document.getElementById(\"a\"); a.style.display=\"none\"; a.src=\"camera?\"+Date.now(); '>");
             client.println();
             break;
-          } 
-          else 
+          }
+          else
           {
             currentLine = "";
           }
-        } 
-        else if (c != '\r') 
+        }
+        else if (c != '\r')
         {
           currentLine += c;
         }
 
-        if(currentLine.endsWith("GET /expmanual"))
+        if (currentLine.endsWith("GET /expmanual"))
         {
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println();
-            client.print("Setting Manual Exposure");
-            client.println();
-            break;
-  
-
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-type:text/html");
+          client.println();
+          client.print("Setting Manual Exposure");
+          client.println();
+          break;
         }
-        if(currentLine.endsWith("GET /current"))
+        if (currentLine.endsWith("GET /current"))
         {
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:image/jpeg");
-            client.println();
-            client.write(fb, frame_size);
-            break;
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-type:image/jpeg");
+          client.println();
+          client.write(fb, frame_size);
+          break;
         }
-        if(currentLine.endsWith("GET /acquire"))
+        if (currentLine.endsWith("GET /acquire"))
         {
-            acquire_frame();
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println();
-            client.print("Acquiring Frame.");
-            break;
+          acquire_frame();
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-type:text/html");
+          client.println();
+          client.print("Acquiring Frame.");
+          break;
         }
-        
-        if(currentLine.endsWith("GET /camera"))
-        {
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:image/jpeg");
-            client.println();
-            acquire_frame();  
-            client.write(fb, frame_size);
-           }
-        if(currentLine.endsWith("GET /reset"))
-        {
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println();
-            client.print("Resetting mode to SoftAP.");
 
-            EEPROM.begin(512);
-            uint8_t modeconfig=0;
-            EEPROM.put(0, modeconfig);
-            EEPROM.commit();
-            EEPROM.end();
+        if (currentLine.endsWith("GET /camera"))
+        {
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-type:image/jpeg");
+          client.println();
+          acquire_frame();
+          client.write(fb, frame_size);
+        }
+        if (currentLine.endsWith("GET /reset"))
+        {
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-type:text/html");
+          client.println();
+          client.print("Resetting mode to SoftAP.");
 
-            break;
-            }
+          EEPROM.begin(512);
+          uint8_t modeconfig = 0;
+          EEPROM.put(0, modeconfig);
+          EEPROM.commit();
+          EEPROM.end();
+
+          break;
+        }
       }
     }
     // close the connection:
     client.stop();
-  }  
+  }
 }
-
-
 
 static camera_pixelformat_t s_pixel_format;
 bool video_running = false;
@@ -190,80 +189,91 @@ bool video_running = false;
 int udp_server = -1;
 struct sockaddr_in destination;
 
-
-
-uint8_t get_state(){
+uint8_t get_state()
+{
   EEPROM.begin(512);
   uint8_t configmode;
-  EEPROM.get(0,configmode );
+  EEPROM.get(0, configmode);
   EEPROM.end();
   Serial.print("Recovered Mode:");
   Serial.println(configmode);
   return configmode;
 }
 
+void handleSerialInput()
+{
+  if (Serial.available() > 0)
+  {
 
-void handleSerialInput(){
- if (Serial.available() >0){
+    char input = Serial.read();
 
-      char input=Serial.read();
+    if (input == 'l')
+      loadCredentials();
 
-      if (input=='l')    loadCredentials();
+    if (input == 'r')
+      resetCredentials();
 
-      if (input=='r') resetCredentials();
-        
-      
-    if (input == 'i'){
+    if (input == 'i')
+    {
 
       String str;
       Serial.setTimeout(100000);
-      while (Serial.available()>0)Serial.read();
-      
+      while (Serial.available() > 0)
+        Serial.read();
+
       Serial.println(" Configuring Device interactively");
       Serial.print("ESSID:");
-      str=Serial.readStringUntil('\n');
-      str.toCharArray(creds.essid,32);
+      str = Serial.readStringUntil('\n');
+      str.toCharArray(creds.essid, 32);
       Serial.println(creds.essid);
       Serial.print("Password:");
-      
-      str=Serial.readStringUntil('\n');
-      str.toCharArray(creds.pw,32);
+
+      str = Serial.readStringUntil('\n');
+      str.toCharArray(creds.pw, 32);
       Serial.println(creds.pw);
-      Serial.print("Enter 'static' to configure static IP:");
-      String s=Serial.readStringUntil('\n');
-      if (s=="static"){
-      creds.staticmode=1;
-      Serial.print("Enter ip::");
-      creds.ip1=(char)Serial.parseInt();
-      Serial.print(creds.ip1);Serial.print('.');
-      creds.ip2=(char)Serial.parseInt();
-      Serial.print(creds.ip2);Serial.print('.');
-      creds.ip3=(char)Serial.parseInt();
-      Serial.print(creds.ip3);Serial.print('.');
-      creds.ip4=(char)Serial.parseInt();
-      Serial.print(creds.ip4);Serial.println('.');
-      }else{
-        creds.staticmode=0;
+      Serial.println("Enter 'static' to configure static IP:");
+      String s = Serial.readStringUntil('\n');
+      if (s == "static")
+      {
+        creds.staticmode = 1;
+        Serial.print("1st ip number:");
+        creds.ip1 = (char)Serial.parseInt();
+        Serial.println(creds.ip1);
+        Serial.print("2nd ip number:");
+        creds.ip2 = (char)Serial.parseInt();
+        Serial.println(creds.ip2);
+        Serial.print("3rd ip number:");
+        creds.ip3 = (char)Serial.parseInt();
+        Serial.println(creds.ip3);
+        Serial.print("4th ip number:");
+        creds.ip4 = (char)Serial.parseInt();
+        Serial.print(creds.ip4);
+        Serial.println('.');
+      }
+      else
+      {
+        creds.staticmode = 0;
         Serial.println("Configuring DHCP");
-        }
+      }
 
       Serial.print("Type 'yes' to save:");
-      while (Serial.available()>0)Serial.read();
-      
-      String yes=Serial.readStringUntil('\n');
-      if (yes=="yes"){
-        creds.state=1; // set this creds state to configured.
+      while (Serial.available() > 0)
+        Serial.read();
+
+      String yes = Serial.readStringUntil('\n');
+      if (yes == "yes")
+      {
+        creds.state = 1; // set this creds state to configured.
         saveCredentials();
       }
       else
         Serial.println("Not saving.");
     }
-    }
+  }
 }
 
-
-
-void setup() {
+void setup()
+{
   esp_log_level_set("camera", ESP_LOG_DEBUG);
   Serial.begin(115200);
   esp_err_t err;
@@ -301,115 +311,117 @@ void setup() {
 
   camera_model_t camera_model;
   err = camera_probe(&camera_config, &camera_model);
-  if (err != ESP_OK) {
-      return;
+  if (err != ESP_OK)
+  {
+    return;
   }
 
-  if (camera_model == CAMERA_OV7725) {
-      s_pixel_format = CAMERA_PIXEL_FORMAT;
-      camera_config.frame_size = CAMERA_FRAME_SIZE;
-      
-      ESP_LOGI(TAG, "Detected OV7725 camera, using %s bitmap format",
-              CAMERA_PIXEL_FORMAT == CAMERA_PF_GRAYSCALE ?
-                      "grayscale" : "RGB565");
-  } else if (camera_model == CAMERA_OV2640) {
-      ESP_LOGI(TAG, "Detected OV2640 camera, using JPEG format");
-      s_pixel_format = CAMERA_PF_JPEG;
-      //s_pixel_format =  CAMERA_PF_GRAYSCALE;
-      camera_config.frame_size = CAMERA_FRAME_SIZE;
-      camera_config.jpeg_quality = 10;
-  } else {
-      ESP_LOGE(TAG, "Camera not supported");
-      return;
+  if (camera_model == CAMERA_OV7725)
+  {
+    s_pixel_format = CAMERA_PIXEL_FORMAT;
+    camera_config.frame_size = CAMERA_FRAME_SIZE;
+
+    ESP_LOGI(TAG, "Detected OV7725 camera, using %s bitmap format",
+             CAMERA_PIXEL_FORMAT == CAMERA_PF_GRAYSCALE ? "grayscale" : "RGB565");
+  }
+  else if (camera_model == CAMERA_OV2640)
+  {
+    ESP_LOGI(TAG, "Detected OV2640 camera, using JPEG format");
+    s_pixel_format = CAMERA_PF_JPEG;
+    //s_pixel_format =  CAMERA_PF_GRAYSCALE;
+    camera_config.frame_size = CAMERA_FRAME_SIZE;
+    camera_config.jpeg_quality = 10;
+  }
+  else
+  {
+    ESP_LOGE(TAG, "Camera not supported");
+    return;
   }
 
   camera_config.pixel_format = s_pixel_format;
   err = camera_init(&camera_config);
-  if (err != ESP_OK) {
-      ESP_LOGE(TAG, "Camera init failed with error 0x%x", err);
-      return;
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(TAG, "Camera init failed with error 0x%x", err);
+    return;
   }
   Serial.println("done camera setup");
 
-
-  
-
-  if (get_state()==1){
+  if (get_state() == 1)
+  {
 
     loadCredentials();
-    
- 
-    if (creds.staticmode==1){
-    Serial.println("Using Static IP");
-    // Set your Static IP address
-    IPAddress local_IP(creds.ip1,creds.ip2,creds.ip3,creds.ip4);
-    // Set your Gateway IP address
-    IPAddress gateway(10,1,10,1);
-    
-    IPAddress subnet(255, 255, 255, 0);
-    IPAddress primaryDNS(8, 8, 8, 8);   //optional
-    IPAddress secondaryDNS(8, 8, 4, 4); //optional
-    if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
-      Serial.println("STA Failed to configure");
-    }
-     
-      
-      }else
+
+    if (creds.staticmode == 1)
+    {
+      Serial.println("Using Static IP");
+      // Set your Static IP address
+      IPAddress local_IP(creds.ip1, creds.ip2, creds.ip3, creds.ip4);
+      // Set your Gateway IP address
+      IPAddress gateway(10, 1, 10, 1);
+
+      IPAddress subnet(255, 255, 255, 0);
+      IPAddress primaryDNS(8, 8, 8, 8);   //optional
+      IPAddress secondaryDNS(8, 8, 4, 4); //optional
+      if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS))
       {
-    Serial.println("Using DHCP");
-     if (!WiFi.begin()) {
-      Serial.println("STA Failed to configure");
+        Serial.println("STA Failed to configure");
+      }
     }
+    else
+    {
+      Serial.println("Using DHCP");
+      if (!WiFi.begin())
+      {
+        Serial.println("STA Failed to configure");
+      }
     }
     Serial.print("Connecting to ");
     Serial.println(creds.essid);
-    
+
     WiFi.begin(creds.essid, creds.pw);
     // Configures static IP address
-    
-    while (WiFi.status() != WL_CONNECTED) {
+
+    while (WiFi.status() != WL_CONNECTED)
+    {
       delay(100);
       handleSerialInput();
       Serial.print(".");
     }
-    
+
     Serial.println("");
     Serial.println("WiFi connected");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
-
-  
   }
-  else{
-    
-  Serial.println("Starting WiFi AP m5cam");
-  WiFi.softAP("m5cam");
-  Serial.print("IP address: ");
-  IPAddress IP = WiFi.softAPIP();
-  Serial.println(IP);
+  else
+  {
+
+    Serial.println("Starting WiFi AP m5cam");
+    WiFi.softAP("m5cam");
+    Serial.print("IP address: ");
+    IPAddress IP = WiFi.softAPIP();
+    Serial.println(IP);
   }
-
-  
-
 
   server.begin();
 }
 
-
-
 /** Load WLAN credentials from EEPROM */
-void loadCredentials() {
+void loadCredentials()
+{
   EEPROM.begin(512);
   EEPROM.get(0, creds);
   EEPROM.end();
   Serial.println("Recovered credentials:");
   Serial.println(creds.essid);
   Serial.println(creds.pw);
- // Serial.println(strlen(password)>0?"********":"<no password>");
+  // Serial.println(strlen(password)>0?"********":"<no password>");
 }
 
 /** Store WLAN credentials to EEPROM */
-void saveCredentials() {
+void saveCredentials()
+{
   Serial.println("Saving credentials");
   EEPROM.begin(512);
   EEPROM.put(0, creds);
@@ -417,21 +429,24 @@ void saveCredentials() {
   EEPROM.end();
 }
 
-void resetCredentials(){
+void resetCredentials()
+{
   Serial.println("Resetting Credentials");
   EEPROM.begin(512);
   EEPROM.put(0, 0);
   EEPROM.commit();
   EEPROM.end();
- }
-  
-void loop() {
+}
+
+void loop()
+{
   serve();
   delay(1);
-  if (digitalRead(GROVE3)>0){
+  if (digitalRead(GROVE3) > 0)
+  {
     acquire_frame();
     Serial.println("Trigger.");
-    }
+  }
 
   handleSerialInput();
-   }
+}
