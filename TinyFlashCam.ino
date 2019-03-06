@@ -282,8 +282,10 @@ void handleSerialInput()
       loadCredentials();
 
     if (input == 'r')
-      resetCredentials();
+        ESP.restart();       
+        //resetCredentials();
 
+ 
     if (input == 'i')
     {
 
